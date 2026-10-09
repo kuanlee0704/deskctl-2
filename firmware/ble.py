@@ -53,6 +53,10 @@ class Link:
         self._txq = []
         self.last_rx = 0
         self.ever_rx = False
+        self.n_conn = 0
+        self.n_disc = 0
+        self.t_conn = 0
+        self.last_up = 0
         self._advertise()
 
     # ---- 狀態 ----
@@ -73,12 +77,18 @@ class Link:
 
     def _irq(self, ev, data):
         if ev == _CONNECT:
+            self.n_conn += 1
+            self.t_conn = time.ticks_ms()
+            print("BLE connect #%d" % self.n_conn)
             self.conn = data[0]
             self.mtu = 23
             self.ever_rx = False
             self._txq = []
             self._rxbuf = b""
         elif ev == _DISCONNECT:
+            self.n_disc += 1
+            self.last_up = time.ticks_diff(time.ticks_ms(), self.t_conn) // 1000
+            print("BLE disconnect #%d after %ds" % (self.n_disc, self.last_up))
             self.conn = None
             self.ever_rx = False
             self._txq = []
@@ -152,6 +162,8 @@ class NullLink:
     """沒有藍牙時(例如模擬器)的替身。"""
     connected = False
     mtu = 23
+
+    n_conn = n_disc = last_up = 0
 
     def online(self, now):
         return False

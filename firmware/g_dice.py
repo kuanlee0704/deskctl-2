@@ -32,7 +32,7 @@ class DicePage(Page):
         self.msg_col = DIM
 
     def get_title(self):
-        return "猜大小 籌碼%d" % self.chips
+        return "猜大小 $%d" % self.chips
 
     def tick(self, now):
         d = self.dirty

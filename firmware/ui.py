@@ -62,12 +62,12 @@ def fmt_ms(ms):
     return "%d:%02d" % (s // 60, s % 60)
 
 
-def draw_topbar(c, title, st, link, now, h24=True):
+def draw_topbar(c, title, st, link, now, h24=True, secs=False):
     c.frect(0, 0, 160, TOP_H - 1, BAR)
     c.hline(0, TOP_H - 1, 160, FAINT)
     c.text(title, 4, 0, ACC)
     x = 158
-    t = clock_str(st, now, h24)
+    t = clock_str(st, now, h24, secs)
     x -= c.text_w(t)
     c.text(t, x, 0, FG if st.t_synced else DIM)
     x -= 4
@@ -107,19 +107,13 @@ class Marquee:
         if self.tw <= self.w:
             cv.text(text, 0, 0, col)
         else:
-            over = self.tw - self.w
-            # 停 1 秒 -> 往左 -> 停 1 秒 -> 回右
-            period = over * 40 * 2 + 2000
-            t = time.ticks_diff(now, self.t0) % period
-            if t < 1000:
-                off = 0
-            elif t < 1000 + over * 40:
-                off = (t - 1000) // 40
-            elif t < 1000 + over * 40 + 1000:
-                off = over
-            else:
-                off = over - (t - 2000 - over * 40) // 40
+            # 停 1.2 秒 -> 一路往左捲, 滑出去後從右邊接回來, 持續循環
+            gap = 28
+            cyc = self.tw + gap
+            t = time.ticks_diff(now, self.t0) % (1200 + cyc * 35)
+            off = 0 if t < 1200 else (t - 1200) // 35
             cv.text(text, -off, 0, col)
+            cv.text(text, cyc - off, 0, col)
         parent.blit(cv, x, y)
 
     @property

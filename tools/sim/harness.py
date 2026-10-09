@@ -46,6 +46,7 @@ class FakeLink:
         self.inbox = []
         self.sent = []
         self.mtu = 23
+        self.n_conn = self.n_disc = self.last_up = 0
     def online(self, now): return self.is_online
     def poll(self, now):
         m, self.inbox = self.inbox, []

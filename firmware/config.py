@@ -1,14 +1,20 @@
+VERSION = "0.4"
+
 # ===== 硬體腳位 =====
 # 擴充板(Display-Keypad)是旋轉 180° 疊在核心板上: 擴充板第 n 腳 -> 核心板第 33-n 腳
 #   LKEY(3)->核心30=GPIO9   UPKEY(4)->核心29=GPIO8   CENTER(5)->核心28=GPIO4
 #   DWKEY(6)->核心27=GPIO5  RKEY(23)->核心10=GPIO13
 #   BL(9)->核心24=GPIO11  CS(10)->核心23=GPIO7  DC(11)->核心22=GPIO6
 #   RES(12)->核心21=GPIO10  SDA(13)->核心20=GPIO3  SCL(14)->核心19=GPIO2
-PIN_LEFT = 9
-PIN_UP = 8
+# 板子橫放(按鍵在右、螢幕在左)時, 實體方向與電路圖上的名稱差 90°:
+#   電路圖 DWKEY(GPIO5) = 橫放時的「左」     電路圖 LKEY(GPIO9)  = 橫放時的「上」
+#   電路圖 UPKEY(GPIO8) = 橫放時的「右」     電路圖 RKEY(GPIO13) = 橫放時的「下」
+# 若方向還是不對, 只要在這裡對調數字即可 (校正畫面最下面會顯示你按到哪個鍵)
+PIN_LEFT = 5
+PIN_UP = 9
 PIN_CENTER = 4
-PIN_DOWN = 5
-PIN_RIGHT = 13
+PIN_DOWN = 13
+PIN_RIGHT = 8
 
 PIN_SCK = 2
 PIN_MOSI = 3
@@ -20,9 +26,9 @@ PIN_BL = 11
 # ===== 螢幕 (橫向 160x80) =====
 LCD_W = 160
 LCD_H = 80
-X_OFF = 1           # 0.96" 80x160 IPS 的顯示區偏移 (橫向時 x=1, y=26)
-Y_OFF = 26
-SPI_BAUD = 40_000_000
+# 0.96" 80x160 IPS 有幾種記憶體偏移規格 (橫向時的 x偏移, y偏移); 校正畫面按「右」切換
+PANELS = ((1, 26), (0, 24), (0, 0), (2, 26))
+SPI_BAUD = 20_000_000
 # 橫向的 4 種 MADCTL 組合, 校正畫面可切換
 ORIENTS = (0x60, 0xA0, 0x20, 0xE0)
 
@@ -36,7 +42,7 @@ SHOW_VLONG_MS = 1800  # 超過這個時間開始顯示倒數
 
 # ===== 藍牙 =====
 BLE_NAME = "DeskCtl"
-ONLINE_TIMEOUT_MS = 15000   # 超過這時間沒收到手機 App 的訊息 -> 視為離線
+ONLINE_TIMEOUT_MS = 25000   # 超過這時間沒收到手機 App 的訊息 -> 視為離線
 
 # ===== 其他 =====
 FONT_FILE = "font12.bin"

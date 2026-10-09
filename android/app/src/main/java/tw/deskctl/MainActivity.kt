@@ -105,7 +105,9 @@ class MainActivity : Activity() {
             append(if (hasBtPerms()) "✔ 藍牙/通知權限已授權\n" else "✘ 尚未授權藍牙/通知權限 (按①)\n")
             append(if (listener) "✔ 通知存取已開啟\n" else "✘ 通知存取未開啟, 讀不到歌名 (按②)\n")
             append(if (BridgeService.running) "✔ 服務執行中\n" else "✘ 服務未執行 (按③)\n")
-            if (BridgeService.mediaInfo.isNotEmpty()) append("♪ " + BridgeService.mediaInfo)
+            if (BridgeService.mediaInfo.isNotEmpty()) append("♪ " + BridgeService.mediaInfo + "\n")
+            append("\n連線日誌:\n")
+            append(BridgeService.logLines.joinToString("\n"))
         }
         h.removeCallbacksAndMessages(null)
         h.postDelayed({ refresh() }, 1000)

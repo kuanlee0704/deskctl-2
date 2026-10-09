@@ -7,7 +7,7 @@ except ImportError:
 from config import *
 
 DEFAULTS = {
-    "orient": 0, "bgr": 1, "inv": 1, "calib": 0,
+    "orient": 0, "panel": 0, "bgr": 1, "inv": 1, "calib": 0,
     "h24": 1, "secs": 0, "idle": 0, "seek": 5, "vstep": 1,
     "ring": ["home", "sw", "music"], "hi": 0, "chips": 100,
 }

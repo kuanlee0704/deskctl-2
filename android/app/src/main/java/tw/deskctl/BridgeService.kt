@@ -68,6 +68,13 @@ class BridgeService : Service() {
         @Volatile var status: String = "尚未啟動"
         @Volatile var running: Boolean = false
         @Volatile var mediaInfo: String = ""
+        val logLines = java.util.concurrent.CopyOnWriteArrayList<String>()
+    }
+
+    private fun log(msg: String) {
+        val t = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+        logLines.add("$t $msg")
+        while (logLines.size > 14) logLines.removeAt(0)
     }
 
     private val h = Handler(Looper.getMainLooper())
@@ -80,6 +87,21 @@ class BridgeService : Service() {
     private var scanning = false
     private var inited = false
     private var tick = 0
+    private var lastRx = 0L
+    private var connectFails = 0
+    private val connectRunnable = Runnable { connect() }
+    private val writeRelease = Runnable { writing = false; pump() }
+    private val connTimeout = Runnable {
+        if (!ready && gatt != null) {
+            log("連線逾時, 重試")
+            closeGatt(); connectFails++; scheduleConnect(800)
+        }
+    }
+
+    private fun scheduleConnect(ms: Long) {
+        h.removeCallbacks(connectRunnable)
+        h.postDelayed(connectRunnable, ms)
+    }
 
     private val txQueue = ArrayDeque<ByteArray>()
     private var writing = false
@@ -191,24 +213,28 @@ class BridgeService : Service() {
 
     private fun connect() {
         if (!inited) return
+        if (gatt != null || scanning) return          // 已在連線/掃描中, 不要重複動作 (否則會把好好的連線關掉)
         val ad = adapter()
         if (ad == null || !ad.isEnabled) {
             setStatus("請先開啟手機藍牙")
-            h.postDelayed({ connect() }, 4000)
+            scheduleConnect(4000)
             return
         }
         if (!hasBt()) {
             setStatus("缺少藍牙權限, 請開啟 App 授權")
-            h.postDelayed({ connect() }, 5000)
+            scheduleConnect(5000)
             return
         }
         val mac = prefs.getString("mac", null)
-        if (mac != null) {
+        if (mac != null && connectFails < 4) {
             setStatus("連線中…")
-            closeGatt()
+            log("直連 $mac (第${connectFails + 1}次)")
             val dev = ad.getRemoteDevice(mac)
-            gatt = dev.connectGatt(this, true, gattCb, android.bluetooth.BluetoothDevice.TRANSPORT_LE)
+            gatt = dev.connectGatt(this, false, gattCb, android.bluetooth.BluetoothDevice.TRANSPORT_LE)
+            h.removeCallbacks(connTimeout)
+            h.postDelayed(connTimeout, 12000)
         } else {
+            connectFails = 0
             startScan(ad)
         }
     }
@@ -216,7 +242,7 @@ class BridgeService : Service() {
     private fun startScan(ad: BluetoothAdapter) {
         if (scanning) return
         val sc = ad.bluetoothLeScanner ?: run {
-            setStatus("無法掃描藍牙"); h.postDelayed({ connect() }, 4000); return
+            setStatus("無法掃描藍牙"); scheduleConnect(4000); return
         }
         setStatus("搜尋 $DEVICE_NAME …")
         val filters = listOf(ScanFilter.Builder().setDeviceName(DEVICE_NAME).build())
@@ -224,7 +250,7 @@ class BridgeService : Service() {
         scanning = true
         sc.startScan(filters, settings, scanCb)
         h.postDelayed({
-            if (scanning) { stopScan(); connect() }   // 逾時後重新掃描
+            if (scanning) { stopScan(); scheduleConnect(500) }   // 逾時後重新掃描
         }, 20000)
     }
 
@@ -241,19 +267,25 @@ class BridgeService : Service() {
                 stopScan()
                 prefs.edit().putString("mac", result.device.address).apply()
                 setStatus("找到裝置, 連線中…")
+                log("找到 ${result.device.address}")
                 closeGatt()
+                connectFails = 0
                 gatt = result.device.connectGatt(
                     this@BridgeService, false, gattCb, android.bluetooth.BluetoothDevice.TRANSPORT_LE
                 )
+                h.removeCallbacks(connTimeout)
+                h.postDelayed(connTimeout, 12000)
             }
         }
 
         override fun onScanFailed(errorCode: Int) {
-            h.post { scanning = false; setStatus("掃描失敗($errorCode)"); h.postDelayed({ connect() }, 5000) }
+            h.post { scanning = false; setStatus("掃描失敗($errorCode)"); scheduleConnect(5000) }
         }
     }
 
     private fun closeGatt() {
+        h.removeCallbacks(connTimeout)
+        h.removeCallbacks(writeRelease)
         ready = false
         writing = false
         txQueue.clear()
@@ -269,12 +301,18 @@ class BridgeService : Service() {
             h.post {
                 if (g != gatt) return@post
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
+                    log("已連上 (status=$st)")
                     setStatus("已連上, 協商中…")
+                    lastRx = SystemClock.elapsedRealtime()
+                    g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
                     if (!g.requestMtu(247)) g.discoverServices()
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                    setStatus("連線中斷, 重新連線…")
+                    log("斷線 status=$st (8=逾時 19=裝置端斷開 133=連線失敗)")
+                    setStatus("連線中斷(代碼 $st), 重新連線…")
+                    val wasReady = ready
                     closeGatt()
-                    h.postDelayed({ connect() }, 2000)
+                    if (!wasReady) connectFails++ else connectFails = 0
+                    scheduleConnect(if (wasReady) 400 else 1500)
                 }
             }
         }
@@ -302,6 +340,9 @@ class BridgeService : Service() {
         override fun onDescriptorWrite(g: BluetoothGatt, d: BluetoothGattDescriptor, st: Int) {
             h.post {
                 ready = true
+                connectFails = 0
+                h.removeCallbacks(connTimeout)
+                log("服務就緒 MTU=$mtu")
                 setStatus("已連線 DeskCtl")
                 lastSent.clear()
                 pushAll()
@@ -309,7 +350,7 @@ class BridgeService : Service() {
         }
 
         override fun onCharacteristicWrite(g: BluetoothGatt, c: BluetoothGattCharacteristic, st: Int) {
-            h.post { writing = false; pump() }
+            h.post { h.removeCallbacks(writeRelease); writing = false; pump() }
         }
 
         // Android 13+ 走這個
@@ -353,16 +394,23 @@ class BridgeService : Service() {
         if (!ready || writing || txQueue.isEmpty()) return
         val chunk = txQueue.removeFirst()
         c.value = chunk
-        c.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-        writing = g.writeCharacteristic(c)
-        if (!writing) {
+        c.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+        val ok = g.writeCharacteristic(c)
+        if (ok) {
+            writing = true
+            h.removeCallbacks(writeRelease)
+            h.postDelayed(writeRelease, 25)      // 回呼沒來也會自動釋放, 避免卡死
+        } else {
             txQueue.addFirst(chunk)
-            h.postDelayed({ pump() }, 60)
+            h.removeCallbacks(writeRelease)
+            writing = true
+            h.postDelayed(writeRelease, 40)
         }
     }
 
     // ---------------- 接收指令 ----------------
     private fun onIncoming(s: String) {
+        lastRx = SystemClock.elapsedRealtime()
         inBuf.append(s)
         while (true) {
             val i = inBuf.indexOf("\n")
@@ -596,11 +644,16 @@ class BridgeService : Service() {
             tick++
             if (ready) {
                 if (tick % 2 == 0) { pushVol(); pushRoute(); pushMode() }
-                if (tick % 5 == 0) {
+                if (tick % 3 == 0) {
                     send(JSONObject().put("k", "ping"))
                     if (controller?.playbackState?.state == PlaybackState.STATE_PLAYING) pushPlay()
                 }
                 if (tick % 60 == 0) pushTime()
+                // 看門狗: 20 秒沒收到任何東西 -> 認定連線已死, 主動重連
+                if (SystemClock.elapsedRealtime() - lastRx > 20000) {
+                    log("20 秒沒有回應, 主動重連")
+                    closeGatt(); scheduleConnect(300)
+                }
             }
             if (inited) h.postDelayed(this, 1000)
         }

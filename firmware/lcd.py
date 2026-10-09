@@ -5,7 +5,7 @@ from config import *
 
 
 class LCD:
-    def __init__(self, orient=0, bgr=True, inv=True):
+    def __init__(self, orient=0, bgr=True, inv=True, panel=0):
         self.cs = Pin(PIN_CS, Pin.OUT, value=1)
         self.dc = Pin(PIN_DC, Pin.OUT, value=0)
         self.rst = Pin(PIN_RST, Pin.OUT, value=1)
@@ -18,7 +18,11 @@ class LCD:
         self.orient = orient
         self.bgr = bgr
         self.inv = inv
+        self.panel = panel
+        time.sleep_ms(150)          # 等電源穩定 (冷開機)
         self.init()
+        time.sleep_ms(60)
+        self.init()                 # 重複初始化一次, 避免冷開機第一次沒吃到
 
     def _make_spi(self):
         kw = dict(baudrate=SPI_BAUD, polarity=0, phase=0, sck=Pin(PIN_SCK), mosi=Pin(PIN_MOSI))
@@ -68,7 +72,9 @@ class LCD:
         self.cmd(0x36, bytes((ORIENTS[self.orient % 4] | (0x08 if self.bgr else 0),)))
         self.cmd(0x21 if self.inv else 0x20)
 
-    def set_mode(self, orient=None, bgr=None, inv=None):
+    def set_mode(self, orient=None, bgr=None, inv=None, panel=None):
+        if panel is not None:
+            self.panel = panel
         if orient is not None:
             self.orient = orient
         if bgr is not None:
@@ -85,7 +91,7 @@ class LCD:
                 pass
 
     def show(self, buf):
-        x0, y0 = X_OFF, Y_OFF
+        x0, y0 = PANELS[self.panel % len(PANELS)]
         self.cmd(0x2A, bytes((x0 >> 8, x0 & 255, (x0 + LCD_W - 1) >> 8, (x0 + LCD_W - 1) & 255)))
         self.cmd(0x2B, bytes((y0 >> 8, y0 & 255, (y0 + LCD_H - 1) >> 8, (y0 + LCD_H - 1) & 255)))
         self.cs(0)

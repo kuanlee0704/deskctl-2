@@ -42,7 +42,8 @@ class HomePage(Page):
             c.text_big(hm[:2], 6, 15, FG, 3, 7)
             c.text_big(":", 48, 15, FG if ss % 2 == 0 else FAINT, 3, 5)
             c.text_big(hm[3:], 63, 15, FG, 3, 7)
-            c.text("%02d" % ss, 112, 35, ACC)
+            if cfg.get("secs"):
+                c.text("%02d" % ss, 112, 35, ACC)
             if ap:
                 c.text(ap, 112, 17, DIM)
             c.text("%d/%02d/%02d %s" % (y, m, d, WEEK[wd]), 6, 52, FG)

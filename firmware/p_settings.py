@@ -18,6 +18,7 @@ class SettingsPage(Page):
         ("自動熄屏", "idle", (0, 30, 60, 300), lambda v: "永不" if not v else ("%d秒" % v if v < 60 else "%d分" % (v // 60))),
         ("跳轉秒數", "seek", (5, 10, 15, 30), lambda v: "%d秒" % v),
         ("音量步進", "vstep", (1, 2, 3), lambda v: "%d格" % v),
+        ("藍牙診斷(中央歸零)", None, None, None),
         ("重新連線藍牙", None, None, None),
         ("螢幕方向校正", None, None, None),
         ("還原所有設定", None, None, None),
@@ -43,7 +44,11 @@ class SettingsPage(Page):
         if key is not None:
             self.change(1, now)
             return
-        if name == "重新連線藍牙":
+        if name.startswith("藍牙診斷"):
+            lk = app.link
+            lk.n_conn = lk.n_disc = 0
+            app.toast("診斷已歸零")
+        elif name == "重新連線藍牙":
             app.link.disconnect()
             app.toast("已中斷, 等手機重連")
         elif name == "螢幕方向校正":
@@ -85,9 +90,12 @@ class SettingsPage(Page):
             if i == self.sel:
                 c.frect(2, y - 1, 156, 14, PANEL)
                 c.text(">", 5, y, ACC)
-            c.text(name, 16, y, FG if i == self.sel else DIM)
+            c.text(name if not name.startswith("藍牙診斷") else "藍牙診斷", 16, y, FG if i == self.sel else DIM)
             if key is not None:
                 c.text_r(fmt(cfg.get(key)), 154, y, ACC)
+            elif name.startswith("藍牙診斷"):
+                lk = self.app.link
+                c.text_r("連%d 斷%d %ds" % (lk.n_conn, lk.n_disc, lk.last_up), 154, y, WARN)
             y += 14
         c.text("上下:選  左右:改  中:執行", 4, 68, FAINT)
         if n > rows:

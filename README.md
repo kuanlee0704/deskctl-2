@@ -23,28 +23,30 @@ deskctl/
 
 | 功能 | 擴充板腳 | 核心板腳 | GPIO |
 |---|---|---|---|
-| 左 LKEY | 3 | 30 | 9 (BOOT 鍵) |
-| 上 UPKEY | 4 | 29 | 8 |
-| 中 CENTER | 5 | 28 | 4 |
-| 下 DWKEY | 6 | 27 | 5 |
-| 右 RKEY | 23 | 10 | 13 |
+| **上**(橫放時) = 電路圖 LKEY | 3 | 30 | 9 (BOOT 鍵) |
+| **右** = 電路圖 UPKEY | 4 | 29 | 8 |
+| **中** = CENTER | 5 | 28 | 4 |
+| **左** = 電路圖 DWKEY | 6 | 27 | 5 |
+| **下** = 電路圖 RKEY | 23 | 10 | 13 |
 | 螢幕 BL / CS / DC / RES | 9 / 10 / 11 / 12 | 24 / 23 / 22 / 21 | 11 / 7 / 6 / 10 |
 | 螢幕 SDA(MOSI) / SCL(SCK) | 13 / 14 | 20 / 19 | 3 / 2 |
 
 要改腳位只要改 `firmware/config.py`。
 
 **注意**
-- **開機/重啟的瞬間不要按住「左」鍵**(GPIO9 = BOOT, 會進下載模式)。中央長按 5 秒重啟時放手即可。
+- 板子橫放(按鍵在右)時, 實體方向比電路圖上的名稱轉了 90°, 所以上述對應是「橫放後的方向」。若仍不對, 在 `config.py` 對調 `PIN_*` 數字即可, 校正畫面最下面會顯示你按到哪個鍵。
+- **開機/重啟的瞬間不要按住「上」鍵**(GPIO9 = BOOT, 會進下載模式)。中央長按 5 秒重啟時放手即可。
 - GPIO13 同時接板上 LED, 若「右」鍵偶爾誤判, 請告訴我, 可改軟體消除。
 - GPIO11 在部分核心板是 flash 電源腳, 程式會自動嘗試; 失敗只代表無法關背光(常亮), 不影響使用。
 
 ## 2. 燒錄與上傳韌體(需要一台電腦做一次)
 
 1. 下載 MicroPython 的 **ESP32_GENERIC_C3** 韌體(micropython.org/download/ESP32_GENERIC_C3/), 用 `esptool` 燒錄:
-   `esptool.py --chip esp32c3 --port COM5 erase_flash` 然後 `esptool.py --chip esp32c3 --port COM5 --baud 460800 write_flash 0 ESP32_GENERIC_C3-xxxx.bin`
+   `esptool.py --chip esp32c3 --port COM5 erase_flash` 然後 `esptool.py --chip esp32c3 --port COM5 --baud 460800 write_flash --flash_mode dio 0 ESP32_GENERIC_C3-xxxx.bin`
+   **一定要加 `--flash_mode dio`**: 這塊板子的 SPI Flash 在 QIO 模式會和 GPIO12/13 衝突, 而「右」鍵就接在 GPIO13。
    (USB-C 接板上的 CH343P 那顆; Windows 需要 CH343 驅動)
 2. `pip install mpremote`, 然後執行 `tools/upload.sh COM5`(Windows 用 `tools\upload.bat COM5`), 會把 `firmware/` 全部傳上去並重啟。
-3. 第一次開機會出現**螢幕校正畫面**: 上=轉方向、下=反相、左=RGB/BGR 色序, 調到「文字正、按鍵在右、R/G/B 色塊顏色對」後按中央儲存。之後可在 目錄→快捷設定→螢幕方向校正 重做。
+3. 第一次開機會出現**螢幕校正畫面**: 上=轉方向、**右=換面板型號(偏移)**、下=反相、左=RGB/BGR 色序, 調到「文字正、按鍵在右、R/G/B 色塊顏色對」後按中央儲存。之後可在 目錄→快捷設定→螢幕方向校正 重做。
 
 ## 3. 手機 App(Android 8.0+)
 
@@ -134,8 +136,11 @@ UUID 與 Nordic UART 相同(可用 nRF Connect 看): Service `6E400001-…`; 手
 | 畫面全黑 | 確認背光(GPIO11); 到校正畫面試「上」換方向、「下」反相 |
 | 畫面鏡像/顛倒 | 目錄→快捷設定→螢幕方向校正, 按「上」直到正確 |
 | 紅藍顏色反了 | 校正畫面按「左」切換 RGB/BGR |
-| 畫面偏移/邊緣有雜點 | `config.py` 的 `X_OFF` / `Y_OFF`(橫向預設 1 / 26) |
+| 畫面歪斜(斜體)/偏移/邊緣雜點 | 進校正畫面按「右」切換面板型號(偏移規格), 直到外框四邊完整、不歪斜 |
+| 想重新校正 | **開機(插上電)時按住中央**, 就會進入校正畫面(畫面左上會顯示版本號 v0.4, 可用來確認檔案是否上傳成功) |
+| 已存過設定, 進不了校正畫面 | 電腦執行 `mpremote fs rm :settings.json` 後重啟, 就會重新校正 |
 | 開機後出現錯誤文字 | 8 秒後會自動重啟; 用 `mpremote` 連線看完整錯誤訊息 |
 | 圖示一直是灰色 | 手機 App 沒啟動 / 藍牙沒開 / 板子沒通電; 黃色 = 已連上但 App 沒回應(重新按③) |
+| 藍牙連一下斷一下 | 看手機 App 主畫面最下方的「連線日誌」(會寫斷線代碼: 8=訊號逾時、19=裝置端斷開、133=連線失敗); 板子的 快捷設定→藍牙診斷 會顯示連線/斷線次數與上次連線秒數 |
 | 沒有歌名 | 沒開「通知存取」, 或沒有任何音樂 App 在播放 |
 | 右鍵不靈 | GPIO13 與 LED 共用, 回報我 |

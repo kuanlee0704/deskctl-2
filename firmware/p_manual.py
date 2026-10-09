@@ -27,7 +27,7 @@ class ManualPage(Page):
         self.i = 0
 
     def get_title(self):
-        return "說明 %d/%d %s" % (self.i + 1, len(PAGES), PAGES[self.i][0])
+        return "說明 %d/%d" % (self.i + 1, len(PAGES))
 
     def on_key(self, k, ev, now):
         self.dirty = True

@@ -11,11 +11,13 @@ def boot():
     from state import State
     st = State()
     cfg = st.cfg
-    lcd = LCD(cfg.get("orient"), bool(cfg.get("bgr")), bool(cfg.get("inv")))
+    print("DeskCtl v" + VERSION, cfg.d)
+    keys = Keys()
+    force_calib = bool(keys.read_raw()[2])       # 開機時按住中央 -> 強制進入校正
+    lcd = LCD(cfg.get("orient"), bool(cfg.get("bgr")), bool(cfg.get("inv")), cfg.get("panel"))
     font = Font(FONT_FILE)
     c = Canvas(LCD_W, LCD_H, font)
-    keys = Keys()
-    if not cfg.get("calib"):
+    if force_calib or not cfg.get("calib"):
         import calib
         calib.run(lcd, c, keys, cfg)
         del sys.modules["calib"]

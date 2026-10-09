@@ -31,7 +31,7 @@ write(msg[7:30]); write(msg[30:] + b'{"k":"ping"}\n{"k":"vo')
 r = L.poll(100)
 chk("two msgs parsed across fragments", [x["k"] for x in r] == ["track", "ping"] and r[0]["t"] == "晴天")
 write(b'l","v":3}\n'); chk("tail completed", L.poll(200)[0]["k"] == "vol")
-chk("online after rx", L.online(300)); chk("offline after timeout", not L.online(300 + 16000))
+chk("online after rx", L.online(300)); chk("offline after timeout", not L.online(300 + 26000))
 L.mtu = 23
 L.send({"c": "seek", "d": 5000, "pad": "x" * 40})
 n = 0

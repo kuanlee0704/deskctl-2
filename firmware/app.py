@@ -270,7 +270,8 @@ class App:
         if time.ticks_diff(now, self._last_draw) < FPS_MS:
             return
         st, link = self.st, self.link
-        minute = st.local(now)[4] if st.t_synced else -1
+        secs = bool(st.cfg.get("secs"))
+        minute = st.local(now)[5 if secs else 4] if st.t_synced else -1
         sig = (link.online(now), link.connected, st.sw_run, minute, st.t_synced,
                st.batt, self._toast is not None)
         need = self.cur.tick(now)
@@ -297,7 +298,7 @@ class App:
             self.cur.draw(c, now)
         finally:
             ui.draw_topbar(c, self.cur.get_title(), self.st, self.link, now,
-                           self.st.cfg.get("h24"))
+                           self.st.cfg.get("h24"), bool(self.st.cfg.get("secs")))
         if holding:
             self.draw_hold(c, now)
         elif self._toast is not None:
