@@ -31,7 +31,7 @@ object Prefs {
     fun wakeLock(c: Context): Boolean = sp(c).getBoolean("wake_lock", true)
     fun setWakeLock(c: Context, v: Boolean) { sp(c).edit().putBoolean("wake_lock", v).apply() }
 
-    /** 目錄設定 (JSON: {"m":[頁面id...],"r":[環狀切換id...]}), 空字串 = 沿用控制器自己的設定 */
+    /** 目錄設定 (JSON 物件, m=目錄順序 r=快速切換), 空字串 = 沿用控制器自己的設定 */
     fun layout(c: Context): String = sp(c).getString("layout", "") ?: ""
     fun setLayout(c: Context, v: String) { sp(c).edit().putString("layout", v).apply() }
 

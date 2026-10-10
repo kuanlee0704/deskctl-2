@@ -321,10 +321,7 @@ class ShortcutsPage(private val act: Activity) {
                 val keys = arrayOf("play", "pause", "toggle", "next", "prev")
                 AlertDialog.Builder(act).setTitle("媒體鍵").setItems(names) { _, w -> done(Step("media", keys[w])) }.show()
             }
-            "tap" -> ask(
-                "點擊位置 (橫%,縱%)", "例如 50,40 = 畫面正中央偏上",
-                if (st.a.isEmpty()) "50,40" else st.a
-            ) { s -> done(Step("tap", s)) }
+            "tap" -> askTap(if (st.a.isEmpty()) "50,40" else st.a) { s -> done(Step("tap", s)) }
             "text" -> ask("按鈕上的文字", "例如 播放", st.a) { s -> done(Step("text", s)) }
             else -> done(Step(st.type))
         }
@@ -344,6 +341,51 @@ class ShortcutsPage(private val act: Activity) {
             }
             .setNegativeButton("取消", null)
             .show()
+    }
+
+    /** 點擊位置: 可直接輸入「橫%,縱%」, 或按「在畫面上選取」用準星點選 */
+    private fun askTap(initial: String, ok: (String) -> Unit) {
+        val e = EditText(act)
+        e.hint = "橫%,縱% 例如 50,40"
+        e.setText(initial)
+        e.setSingleLine(true)
+        AlertDialog.Builder(act).setTitle("點擊位置")
+            .setMessage("橫、縱都是 0~100 的百分比 (0,0=左上角, 100,100=右下角)。不想自己算就按「在畫面上選取」。")
+            .setView(e)
+            .setPositiveButton("確定") { _, _ ->
+                val t = e.text.toString().trim()
+                if (t.isNotEmpty()) ok(t)
+            }
+            .setNeutralButton("在畫面上選取") { _, _ -> pickOnScreen(e.text.toString(), ok) }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun pickOnScreen(cur: String, ok: (String) -> Unit) {
+        if (!Launcher.overlayOk(act)) {
+            toast("請先到「設定」開啟「顯示在其他 App 上層」")
+            return
+        }
+        val p = cur.split(",")
+        val x0 = p.getOrNull(0)?.trim()?.toFloatOrNull() ?: 50f
+        val y0 = p.getOrNull(1)?.trim()?.toFloatOrNull() ?: 40f
+        val started = PosPicker.start(act, x0, y0) { x, y ->
+            // 選好後把 App 帶回前景, 並用選到的值重新開啟對話框
+            try {
+                act.startActivity(
+                    Intent(act, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                )
+            } catch (_: Exception) {
+            }
+            val v = String.format("%.0f,%.0f", x, y)
+            act.window.decorView.postDelayed({ askTap(v, ok) }, 400)
+        }
+        if (!started) {
+            toast("無法顯示選取準星")
+            return
+        }
+        toast("切到要點的畫面, 拖曳準星後按「確定」")
+        act.moveTaskToBack(true)
     }
 
     private fun confirm(msg: String, ok: () -> Unit) {

@@ -58,7 +58,7 @@ object LayoutStore {
 
 /**
  * 控制器 ⇄ 手機: 接收控制器的 stat(運作狀態/記憶體)、pages(可用頁面)、layout(目前目錄);
- * 並把手機上設定的目錄順序 {"k":"layout","m":[...],"r":[...]} 推給控制器。
+ * 並把手機上設定的目錄順序 (k=layout, m=順序, r=快速切換) 推給控制器。
  */
 class DeviceFeature(host: FeatureHost) : Feature(host) {
     override val id = "device"

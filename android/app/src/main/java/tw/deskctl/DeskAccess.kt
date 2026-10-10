@@ -65,8 +65,16 @@ class DeskAccess : AccessibilityService() {
 
     override fun onInterrupt() {}
 
+    private fun realMetrics(): android.util.DisplayMetrics {
+        val dm = android.util.DisplayMetrics()
+        val wm = getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
+        @Suppress("DEPRECATION")
+        wm.defaultDisplay.getRealMetrics(dm)
+        return dm
+    }
+
     private fun doTap(xp: Float, yp: Float): Boolean {
-        val dm = resources.displayMetrics
+        val dm = realMetrics()
         val p = Path()
         p.moveTo(dm.widthPixels * xp / 100f, dm.heightPixels * yp / 100f)
         val g = GestureDescription.Builder()
@@ -76,7 +84,7 @@ class DeskAccess : AccessibilityService() {
     }
 
     private fun doSwipe(x1: Float, y1: Float, x2: Float, y2: Float, ms: Long): Boolean {
-        val dm = resources.displayMetrics
+        val dm = realMetrics()
         val p = Path()
         p.moveTo(dm.widthPixels * x1 / 100f, dm.heightPixels * y1 / 100f)
         p.lineTo(dm.widthPixels * x2 / 100f, dm.heightPixels * y2 / 100f)
