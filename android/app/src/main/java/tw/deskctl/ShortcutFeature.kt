@@ -131,6 +131,10 @@ class ShortcutFeature(host: FeatureHost) : Feature(host) {
                     }
                     return
                 }
+                "ensureplay" -> {
+                    ensurePlay(sc, idx, 3, st.a.ifEmpty { "50,23" })
+                    return
+                }
                 "firstvideo" -> {
                     if (DeskAccess.instance == null) {
                         finish(sc, false, "需要開啟無障礙服務")
@@ -217,6 +221,53 @@ class ShortcutFeature(host: FeatureHost) : Feature(host) {
             return
         }
         host.handler.postDelayed({ firstVideo(sc, idx, left - 1) }, 1000L)
+    }
+
+    private fun musicActive(): Boolean =
+        (ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager).isMusicActive
+
+    /**
+     * 確保真的在播放: 瀏覽器在背景開啟的影片常卡在開頭或被自動靜音 (需要「使用者手勢」才解除)。
+     * 每一輪依序: 點「取消靜音」並解除系統靜音 → 送播放鍵 → 用真實觸控點一下播放器 (這一下算使用者手勢),
+     * 最多 3 輪; 只要偵測到有聲音在播放就結束。
+     */
+    private fun ensurePlay(sc: Shortcut, idx: Int, left: Int, pos: String) {
+        val hd = host.handler
+        val next = { hd.postDelayed({ step(sc, idx + 1) }, 500L); Unit }
+        if (musicActive()) {
+            AppLog.i("SHORTCUT", "已在播放")
+            next()
+            return
+        }
+        if (left <= 0) {
+            finish(sc, false, "沒有開始播放")
+            return
+        }
+        AppLog.i("SHORTCUT", "尚未播放, 嘗試喚醒 (剩 " + left + " 次)")
+        DeskAccess.clickAny("取消靜音", "解除靜音", "點按即可取消靜音", "Unmute", "Tap to unmute")
+        try {
+            (ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager)
+                .adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
+        } catch (_: Exception) {
+        }
+        hd.postDelayed({
+            if (musicActive()) {
+                next()
+            } else {
+                mediaKey("play")
+                hd.postDelayed({
+                    if (musicActive()) {
+                        next()
+                    } else {
+                        val p = pos.split(",")
+                        val x = p.getOrNull(0)?.trim()?.toFloatOrNull() ?: 50f
+                        val y = p.getOrNull(1)?.trim()?.toFloatOrNull() ?: 23f
+                        DeskAccess.tap(x, y)
+                        hd.postDelayed({ ensurePlay(sc, idx, left - 1, pos) }, 1500L)
+                    }
+                }, 1500L)
+            }
+        }, 1200L)
     }
 
     private fun retryClick(sc: Shortcut, idx: Int, text: String, left: Int) {

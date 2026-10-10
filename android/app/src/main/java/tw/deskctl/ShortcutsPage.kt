@@ -225,6 +225,8 @@ class ShortcutsPage(private val act: Activity) {
                 sc.steps.add(Step("url", "https://m.youtube.com/results?search_query=" + q, pkg))
                 sc.steps.add(Step("wait", "6"))
                 sc.steps.add(Step("firstvideo"))
+                sc.steps.add(Step("wait", "3"))
+                sc.steps.add(Step("ensureplay", "50,23"))
                 list.add(sc)
                 save()
                 toast("會自動點第一部影片; 若點錯, 可把此步驟換成「點擊畫面」並用準星選位置")
@@ -289,7 +291,8 @@ class ShortcutsPage(private val act: Activity) {
         "開啟 App", "開網址", "等待幾秒", "媒體鍵 (播放/暫停/下一首…)",
         "點擊畫面位置 (需無障礙)", "點擊含某文字的按鈕 (需無障礙)", "按返回 (需無障礙)",
         "重新整理目前頁面 (需無障礙)", "喚醒螢幕",
-        "點第一部影片 (搜尋結果頁, 需無障礙)"
+        "點第一部影片 (搜尋結果頁, 需無障礙)",
+        "確保播放中 (卡住/被靜音時補點擊, 需無障礙)"
     )
 
     private fun addStep(done: (Step) -> Unit) {
@@ -308,7 +311,8 @@ class ShortcutsPage(private val act: Activity) {
         6 -> "back"
         7 -> "refresh"
         8 -> "wake"
-        else -> "firstvideo"
+        9 -> "firstvideo"
+        else -> "ensureplay"
     }
 
     private fun editStep(st: Step, done: (Step) -> Unit) {
@@ -324,6 +328,7 @@ class ShortcutsPage(private val act: Activity) {
                 AlertDialog.Builder(act).setTitle("媒體鍵").setItems(names) { _, w -> done(Step("media", keys[w])) }.show()
             }
             "tap" -> askTap(if (st.a.isEmpty()) "50,40" else st.a) { s -> done(Step("tap", s)) }
+            "ensureplay" -> askTap(if (st.a.isEmpty()) "50,23" else st.a) { s -> done(Step("ensureplay", s)) }
             "text" -> ask("按鈕上的文字", "例如 播放", st.a) { s -> done(Step("text", s)) }
             else -> done(Step(st.type))
         }

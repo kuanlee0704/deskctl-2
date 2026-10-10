@@ -275,9 +275,9 @@ for ev in (("run", "很長很長很長很長很長很長很長的捷徑名稱", 
 # ---------- 手機狀態 ----------
 r = mk(); r.app.go("sys", clock.now); snap(r, "sys empty")
 full = dict(pl=2, t=-123, v=4180, th=3, nt=1, wf=4, bt=1, sc=1, ps=1, ds=1, bk=45, br=1, ra=88, rf=12288, ap=1234, ca=9999, sf=1234)
-for sysd in (full, dict(nt=0, bk=10), dict(nt=2, bt=0, sc=0)):
+for sysd in (full, dict(nt=0, bk=10), dict(nt=2, bt=0, sc=0), dict(pl=0, t=452, v=3500, th=2, nt=1, wf=0, ra=95, rf=100, ap=9999, ca=9999, sf=5, bk=50, br=0), dict(t=300, v=4000, th=0, nt=1, wf=2, bk=20, ra=5, rf=9999, sf=9999)):
     r.msg(k="sys", **sysd); r.run(100)
-    for i in range(4):
+    for i in range(5):
         snap(r, "sys %s sub=%d" % (sorted(sysd)[:2], r.app.cur.sub)); r.click(K_DOWN)
 r.st.batt = 100; r.st.charging = True; r.app.cur.sub = 0; snap(r, "sys batt100")
 
