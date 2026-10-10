@@ -26,7 +26,21 @@ class Link:
         import bluetooth
         self._bt = bluetooth
         self.ble = bluetooth.BLE()
-        self.ble.active(True)
+        # 先直接開; 失敗才 關->等->開 重試 (軟重啟後控制器偶爾卡住)
+        err = None
+        for i in range(3):
+            try:
+                if i:
+                    self.ble.active(False)
+                    time.sleep_ms(200)
+                self.ble.active(True)
+                err = None
+                break
+            except OSError as e:
+                err = e
+                time.sleep_ms(300)
+        if err:
+            raise err
         try:
             self.ble.config(mtu=247)
         except Exception:
@@ -53,6 +67,7 @@ class Link:
         self._txq = []
         self.last_rx = 0
         self.ever_rx = False
+        self.seen = False
         self.n_conn = 0
         self.n_disc = 0
         self.t_conn = 0
@@ -65,8 +80,13 @@ class Link:
         return self.conn is not None
 
     def online(self, now):
-        return self.conn is not None and self.ever_rx and \
-            time.ticks_diff(now, self.last_rx) < ONLINE_TIMEOUT_MS
+        if not self.seen:
+            return False
+        age = time.ticks_diff(now, self.last_rx)
+        if self.conn is not None and self.ever_rx:
+            return age < ONLINE_TIMEOUT_MS
+        # 剛斷線/剛重連、還沒收到新訊息: 寬限期內仍顯示在線, 避免畫面閃一下
+        return age < ONLINE_GRACE_MS
 
     # ---- 內部 ----
     def _advertise(self):
@@ -106,9 +126,9 @@ class Link:
     # ---- 收 ----
     def poll(self, now):
         """回傳手機傳來的訊息 (dict list)"""
-        out = []
         if b"\n" not in self._rxbuf:
-            return out
+            return ()
+        out = []
         buf = self._rxbuf
         self._rxbuf = b""
         parts = buf.split(b"\n")
@@ -122,6 +142,7 @@ class Link:
                 continue
             self.last_rx = now
             self.ever_rx = True
+            self.seen = True
             out.append(m)
         return out
 
@@ -169,7 +190,7 @@ class NullLink:
         return False
 
     def poll(self, now):
-        return []
+        return ()
 
     def send(self, d):
         return False

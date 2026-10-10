@@ -12,6 +12,7 @@ PAGES = (
     ("snake", "貪吃蛇", "g_snake", "SnakePage", "game"),
     ("ab", "1A2B 猜數字", "g_ab", "ABPage", "game"),
     ("dice", "骰子猜大小", "g_dice", "DicePage", "game"),
+    ("rand", "隨機取數", "g_rand", "RandPage", "game"),
     # --- 想新增遊戲/功能就在這裡加一行 ---
 )
 

@@ -11,17 +11,19 @@ import androidx.core.content.ContextCompat
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
-        val prefs = context.getSharedPreferences("deskctl", Context.MODE_PRIVATE)
-        if (!prefs.getBoolean("autostart", true) || !prefs.getBoolean("was_started", false)) return
+        if (!Prefs.autostart(context) || !Prefs.wasStarted(context)) return
         if (Build.VERSION.SDK_INT >= 31 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
             != PackageManager.PERMISSION_GRANTED
         ) return
         try {
+            AppLog.init(context)
+            AppLog.i("BOOT", "開機自動啟動服務")
             ContextCompat.startForegroundService(
                 context, Intent(context, BridgeService::class.java).setAction(BridgeService.ACTION_START)
             )
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            AppLog.e("BOOT", "自動啟動失敗: " + e)
         }
     }
 }

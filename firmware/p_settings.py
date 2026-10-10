@@ -1,6 +1,17 @@
 from app import Page
 from keys import *
 from ui import *
+from config import BL_CONTROL
+
+
+def _dur(v):
+    if not v:
+        return "永不"
+    if v < 60:
+        return "%d秒" % v
+    if v < 3600:
+        return "%d分" % (v // 60)
+    return "%d小時" % (v // 3600) if v % 3600 == 0 else "%.1f小時" % (v / 3600)
 
 
 def _onoff(v):
@@ -12,10 +23,16 @@ class SettingsPage(Page):
     reset_label = ""
 
     # (名稱, 設定鍵, 選項值, 顯示函式)
-    ITEMS = (
+    _ALL = (
         ("時間制", "h24", (1, 0), lambda v: "24小時" if v else "12小時"),
         ("首頁顯示秒", "secs", (0, 1), _onoff),
-        ("自動熄屏", "idle", (0, 30, 60, 300), lambda v: "永不" if not v else ("%d秒" % v if v < 60 else "%d分" % (v // 60))),
+        ("狀態欄顯示秒", "tsecs", (0, 1), _onoff),
+        ("背光亮度", "bright", (30, 50, 80, 100), lambda v: "%d%%" % v),
+        ("閒置省電", "pwr", (1, 0), _onoff),
+        ("變暗時間", "dimt", (15, 30, 60, 120, 300, 600), _dur),
+        ("低亮度/時鐘待機", "lowt", (60, 120, 300, 600, 1200, 1800, 3600), _dur),
+        ("自動熄屏", "idle", (0, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200), _dur),
+        ("深度睡眠(實驗)", "lsleep", (0, 1), _onoff),
         ("跳轉秒數", "seek", (5, 10, 15, 30), lambda v: "%d秒" % v),
         ("音量步進", "vstep", (1, 2, 3), lambda v: "%d格" % v),
         ("藍牙診斷(中央歸零)", None, None, None),
@@ -23,6 +40,8 @@ class SettingsPage(Page):
         ("螢幕方向校正", None, None, None),
         ("還原所有設定", None, None, None),
     )
+
+    ITEMS = tuple(i for i in _ALL if BL_CONTROL or i[1] not in ("bright", "dimt"))
 
     def __init__(self, app):
         Page.__init__(self, app)

@@ -2,6 +2,7 @@
 import time
 from gfx import rgb, Icon, Canvas
 from state import civil
+from config import MARQUEE_MS_PER_PX, MARQUEE_HOLD_MS, MARQUEE_GAP_PX
 
 BG = rgb(6, 9, 15)
 PANEL = rgb(22, 30, 46)
@@ -63,9 +64,9 @@ def fmt_ms(ms):
 
 
 def draw_topbar(c, title, st, link, now, h24=True, secs=False):
+    """secs = 狀態欄是否顯示秒 (設定 tsecs, 與首頁的秒數設定分開)"""
     c.frect(0, 0, 160, TOP_H - 1, BAR)
     c.hline(0, TOP_H - 1, 160, FAINT)
-    c.text(title, 4, 0, ACC)
     x = 158
     t = clock_str(st, now, h24, secs)
     x -= c.text_w(t)
@@ -77,10 +78,15 @@ def draw_topbar(c, title, st, link, now, h24=True, secs=False):
     x -= 7
     c.icon(IC["bt"], x, 1, col)
     x -= 3
+    if online and st.has_track and st.pl == 1:      # 手機正在播放音訊
+        x -= 8
+        c.icon(IC["play"], x, 2, ACC)
+        x -= 3
     if st.sw_run:
         x -= 9
         c.icon(IC["stopw"], x, 1, WARN)
         x -= 3
+    c.text(clip_text(c, title, x - 6), 4, 0, ACC)
     return x
 
 
@@ -107,11 +113,10 @@ class Marquee:
         if self.tw <= self.w:
             cv.text(text, 0, 0, col)
         else:
-            # 停 1.2 秒 -> 一路往左捲, 滑出去後從右邊接回來, 持續循環
-            gap = 28
-            cyc = self.tw + gap
-            t = time.ticks_diff(now, self.t0) % (1200 + cyc * 35)
-            off = 0 if t < 1200 else (t - 1200) // 35
+            # 停一下 -> 一路往左捲, 滑出去後從右邊接回來, 持續循環
+            cyc = self.tw + MARQUEE_GAP_PX
+            t = time.ticks_diff(now, self.t0) % (MARQUEE_HOLD_MS + cyc * MARQUEE_MS_PER_PX)
+            off = 0 if t < MARQUEE_HOLD_MS else (t - MARQUEE_HOLD_MS) // MARQUEE_MS_PER_PX
             cv.text(text, -off, 0, col)
             cv.text(text, cyc - off, 0, col)
         parent.blit(cv, x, y)

@@ -33,9 +33,16 @@ class Keys:
         self.hold_next = [0] * n
         self.maxc = list(_DEFAULT_MAXC)
         self.fast = ()
+        self._out = []
+        self._rawbuf = [False] * 5
 
     def read_raw(self):
-        return [not p.value() for p in self._pins]
+        r = self._rawbuf
+        i = 0
+        for p in self._pins:
+            r[i] = not p.value()
+            i += 1
+        return r
 
     def set_fast(self, keys):
         """fast 內的鍵不等連按判定: CLICK 於放開時立即送出 (給遊戲用)"""
@@ -58,7 +65,8 @@ class Keys:
     def poll(self, now, raw=None):
         if raw is None:
             raw = self.read_raw()
-        out = []
+        out = self._out
+        del out[:]
         td = time.ticks_diff
         for k in range(5):
             # 去彈跳

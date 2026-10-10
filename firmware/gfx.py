@@ -11,7 +11,8 @@ def rgb(r, g, b):
 
 
 class Font:
-    CACHE_MAX = 170
+    """字型讀取。所有字元槽位在啟動時一次配置好, 之後不再產生新物件 (避免記憶體碎片)。"""
+    SLOTS = 120
 
     def __init__(self, path):
         self.f = open(path, "rb")
@@ -22,7 +23,15 @@ class Font:
         self.codes_off = 6
         self.adv_off = 6 + 2 * self.n
         self.bmp_off = self.adv_off + self.n
-        self.cache = {}
+        n = self.SLOTS
+        self.gbuf = bytearray(24 * n)
+        mv = memoryview(self.gbuf)
+        self.mvs = [mv[i * 24:(i + 1) * 24] for i in range(n)]
+        self.fbs = [framebuf.FrameBuffer(self.mvs[i], 16, 12, framebuf.MONO_HLSB) for i in range(n)]
+        self.advs = bytearray(n)
+        self.owner = [0] * n
+        self.slot = {}
+        self.nxt = 0
         self._b2 = bytearray(2)
         self._b1 = bytearray(1)
 
@@ -43,34 +52,38 @@ class Font:
         return -1
 
     def get(self, cp):
-        """回傳 (推進寬度, 原始 24 bytes, 16x12 單色 FrameBuffer)"""
-        g = self.cache.get(cp)
-        if g is not None:
-            return g
+        """回傳字元所在的槽位編號; 寬度 = advs[槽], 圖 = fbs[槽], 原始資料 = gbuf[槽*24:]"""
+        s = self.slot.get(cp)
+        if s is not None:
+            return s
         idx = self._find(cp)
+        if idx < 0 and cp != 0x3F:
+            return self.get(0x3F)
+        s = self.nxt
+        self.nxt = (s + 1) % self.SLOTS
+        old = self.owner[s]
+        if old:
+            self.slot.pop(old, None)
+        f = self.f
         if idx < 0:
-            if cp == 0x3F:
-                raw, adv = bytearray(24), 6
-            else:
-                return self.get(0x3F)
+            adv = 6
+            self.mvs[s][:] = bytes(24)
         else:
-            f = self.f
             f.seek(self.adv_off + idx)
             f.readinto(self._b1)
             adv = self._b1[0]
-            raw = bytearray(24)
             f.seek(self.bmp_off + 24 * idx)
-            f.readinto(raw)
-        if len(self.cache) >= self.CACHE_MAX:
-            self.cache.clear()
-        g = (adv, raw, framebuf.FrameBuffer(raw, 16, 12, framebuf.MONO_HLSB))
-        self.cache[cp] = g
-        return g
+            f.readinto(self.mvs[s])
+        self.advs[s] = adv
+        self.owner[s] = cp
+        self.slot[cp] = s
+        return s
 
     def width(self, s):
         w = 0
+        advs = self.advs
         for ch in s:
-            w += self.get(ord(ch))[0]
+            w += advs[self.get(ord(ch))]
         return w
 
 
@@ -111,7 +124,7 @@ class Canvas:
     def palette(self, c):
         p = self._pal.get(c)
         if p is None:
-            if len(self._pal) > 24:
+            if len(self._pal) > 40:
                 self._pal.clear()
             pb = bytearray(4)
             p = framebuf.FrameBuffer(pb, 2, 1, framebuf.RGB565)
@@ -124,11 +137,12 @@ class Canvas:
         fb, font = self.fb, self.font
         pal = self.palette(c)
         w = self.w
+        fbs, advs, get = font.fbs, font.advs, font.get
         for ch in s:
-            adv, _, gfb = font.get(ord(ch))
+            sl = get(ord(ch))
             if -12 < x < w:
-                fb.blit(gfb, x, y, 0, pal)
-            x += adv
+                fb.blit(fbs[sl], x, y, 0, pal)
+            x += advs[sl]
         return x
 
     def text_w(self, s):
@@ -145,10 +159,12 @@ class Canvas:
         """放大 k 倍的文字 (給時鐘用)。fixed>0 時每字固定推進寬度。"""
         font = self.font
         fr = self.fb.fill_rect
+        g = font.gbuf
         for ch in s:
-            adv, raw, _ = font.get(ord(ch))
+            sl = font.get(ord(ch))
+            base = sl * 24
             for r in range(12):
-                v = (raw[2 * r] << 8) | raw[2 * r + 1]
+                v = (g[base + 2 * r] << 8) | g[base + 2 * r + 1]
                 if not v:
                     continue
                 b = 0
@@ -161,7 +177,7 @@ class Canvas:
                         b = e
                     else:
                         b += 1
-            x += (fixed if fixed else adv) * k
+            x += (fixed if fixed else font.advs[sl]) * k
         return x
 
     # --- 圖示 (Icon 物件) ---

@@ -1,6 +1,7 @@
 from app import Page
 from ui import *
-from state import WEEK
+from keys import *
+from state import WEEK, PL_PLAY
 
 
 class HomePage(Page):
@@ -15,10 +16,17 @@ class HomePage(Page):
     def on_reset(self, now):
         self.app.link.send({"c": "sync"})
 
+    def on_key(self, k, ev, now):
+        """首頁也能控制音樂 (左右單擊保留給快捷切換頁面)"""
+        self.dirty = True
+        return self.app.mctl.handle(k, ev, now, True)
+
     def tick(self, now):
         st = self.st
         sec = (now // 1000) if not st.t_synced else st.local(now)[5]
         d = self.dirty or sec != self._sec
+        if self.app.mctl.vol_active(now):
+            d = True
         if self.mq is not None and self.mq.animating:
             d = True
         self._sec = sec
@@ -30,7 +38,7 @@ class HomePage(Page):
         cfg = st.cfg
         link = self.app.link
         if self.mq is None:
-            self.mq = Marquee(c.font, 84, DIM)
+            self.mq = self.app.mq[2]
         if st.t_synced:
             y, m, d, hh, mm, ss, wd = st.local(now)
             if not cfg.get("h24"):
@@ -74,6 +82,9 @@ class HomePage(Page):
         c.icon(IC["bt"], 6, 67, col)
         c.text(txt, 16, 66, col)
         if st.has_track and online:
-            self.mq.draw(c, 72, 66, "♪ " + st.title, now, color=DIM if st.pl != 1 else ACC)
+            c.icon(IC["pause"] if st.pl == PL_PLAY else IC["play"], 62, 67, ACC if st.pl == PL_PLAY else DIM)
+            self.mq.draw(c, 74, 66, st.title, now, color=FG if st.pl == PL_PLAY else DIM)
         else:
             self.mq.text = None
+        if self.app.mctl.vol_until:
+            self.app.mctl.draw_vol(c, now)

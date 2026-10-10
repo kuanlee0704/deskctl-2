@@ -1,10 +1,19 @@
 """應用程式核心: 頁面管理、全域手勢、疊加層。"""
+import gc
+import sys
 import time
 import registry
 from keys import *
 from config import *
 import ui
 from ui import *
+from musicctl import MusicCtl
+from power import Power, L as PM_LOW, O as PM_OFF
+from state import PL_PLAY
+
+
+# 常駐的頁面; 其他頁面(遊戲/說明書/設定)離開時會卸載以釋放記憶體
+CORE = ("home", "sw", "music")
 
 
 class Page:
@@ -132,12 +141,21 @@ class App:
         self._last_draw = 0
         self._sig = None
         self.idle_t = now
-        self.sleeping = False
         self._swallow = -1
         self.rebooting = False
         self._reboot = reboot
+        # 大塊緩衝區一開始就配置好, 之後不再動態配置 (避免記憶體碎片)
+        f = canvas.font
+        self.mq = (Marquee(f, 152, FG), Marquee(f, 152, DIM), Marquee(f, 84, DIM))
+        self.mctl = MusicCtl(self)
         self.menu = MenuPage(self)
         self.insts["menu"] = self.menu
+        for pid in CORE:
+            self.page(pid)
+        self._gc_t = now
+        self._gc_n = 0
+        self.pm = Power(self)
+        gc.collect()
         self.go("home", now=now)
 
     # ---------- 頁面 ----------
@@ -161,6 +179,7 @@ class App:
         p = self.page(pid)
         if p is None:
             return
+        old_id = self.cur_id
         if self.cur is not None:
             self.cur.leave()
             if self.cur_id != "menu" and self.cur_id != pid:
@@ -170,6 +189,19 @@ class App:
         self.keys.set_fast(p.fast)
         p.enter(now)
         self._sig = None
+        if old_id and old_id != pid:
+            self.unload(old_id)
+
+    def unload(self, pid):
+        """卸載不常駐的頁面與其程式碼, 把記憶體還回去"""
+        if pid in CORE or pid == "menu":
+            return
+        info = registry.info(pid)
+        if info is None or pid not in self.insts:
+            return
+        del self.insts[pid]
+        sys.modules.pop(info[2], None)
+        gc.collect()
 
     def ring_step(self, d):
         ring = [r for r in self.st.cfg.get("ring") if registry.info(r)]
@@ -205,7 +237,10 @@ class App:
                     self.go("menu", now)
                 return
             if ev == EV_TRIPLE:
-                if self.prev_id and self.prev_id != self.cur_id:
+                # 全域「回首頁」: 不在首頁 -> 回首頁; 在首頁 -> 回到剛才離開的頁面
+                if self.cur_id != "home":
+                    self.go("home", now)
+                elif self.prev_id and self.prev_id != "home":
                     self.go(self.prev_id, now)
                 return
         if self.cur.on_key(k, ev, now):
@@ -227,9 +262,10 @@ class App:
     def step(self, now):
         evs = self.keys.poll(now)
         for k, ev in evs:
-            if self.sleeping:
+            self.idle_t = now
+            if self.pm.state >= PM_LOW:            # 低亮度/熄屏時, 第一下只負責喚醒
                 if ev == EV_PRESS:
-                    self.wake(now)
+                    self.pm.wake(now)
                     self._swallow = k
                 continue
             if self._swallow == k:
@@ -241,39 +277,37 @@ class App:
                 return
         # 手機訊息
         for m in self.link.poll(now):
+            was = self.st.pl
             self.st.apply(m, now)
+            if self.st.pl == PL_PLAY and was != PL_PLAY:
+                self.idle_t = now                  # 手機開始播放 -> 喚醒
             self.cur.dirty = True
             if m.get("k") == "ping":
                 self.link.send({"c": "pong"})
         self.link.pump()
-        self.idle_check(now)
+        self.pm.update(now)
         self.render(now)
+        if time.ticks_diff(now, self._gc_t) > 3000:       # 定期整理記憶體, 避免碎片累積
+            self._gc_t = now
+            gc.collect()
+            self._gc_n += 1
+            if self._gc_n % 10 == 0:
+                print("mem free", gc.mem_free(), "alloc", gc.mem_alloc())
 
-    def wake(self, now):
-        self.sleeping = False
-        self.idle_t = now
-        self.lcd.backlight(True)
-        self._sig = None
-
-    def idle_check(self, now):
-        idle = self.st.cfg.get("idle")
-        if idle and not self.sleeping and not self.keys.any_down():
-            if time.ticks_diff(now, self.idle_t) > idle * 1000:
-                self.sleeping = True
-                self.c.fill(1)
-                self.lcd.show(self.c.buf)
-                self.lcd.backlight(False)
+    @property
+    def sleeping(self):
+        return self.pm.state == PM_OFF
 
     def render(self, now):
-        if self.sleeping:
+        if self.pm.state == PM_OFF:
             return
         if time.ticks_diff(now, self._last_draw) < FPS_MS:
             return
         st, link = self.st, self.link
-        secs = bool(st.cfg.get("secs"))
-        minute = st.local(now)[5 if secs else 4] if st.t_synced else -1
+        tsecs = bool(st.cfg.get("tsecs"))
+        minute = st.local(now)[5 if tsecs else 4] if st.t_synced else -1
         sig = (link.online(now), link.connected, st.sw_run, minute, st.t_synced,
-               st.batt, self._toast is not None)
+               st.batt, self._toast is not None, st.pl, st.has_track)
         need = self.cur.tick(now)
         if sig != self._sig:
             self._sig = sig
@@ -298,7 +332,7 @@ class App:
             self.cur.draw(c, now)
         finally:
             ui.draw_topbar(c, self.cur.get_title(), self.st, self.link, now,
-                           self.st.cfg.get("h24"), bool(self.st.cfg.get("secs")))
+                           self.st.cfg.get("h24"), bool(self.st.cfg.get("tsecs")))
         if holding:
             self.draw_hold(c, now)
         elif self._toast is not None:

@@ -86,7 +86,7 @@ r.hold(K_CENTER, 800); check("center long -> menu", a.cur_id == "menu")
 r.hold(K_CENTER, 800); check("center long again -> back to music", a.cur_id == "music")
 r.hold(K_CENTER, 800); r.click(K_DOWN); r.click(K_CENTER)
 check("menu select -> games", a.cur_id == "games", a.cur_id)
-r.triple(K_CENTER); check("triple center -> previous page (music)", a.cur_id == "music", a.cur_id)
+r.triple(K_CENTER); check("triple center -> home", a.cur_id == "home", a.cur_id)
 r.triple(K_CENTER); check("triple again toggles back", a.cur_id == "games", a.cur_id)
 # 重設 / 重啟
 r.app.go("music"); r.link.sent.clear()
@@ -108,11 +108,13 @@ r.double(K_DOWN); check("down double forces reset", not r.st.sw_run and r.st.sw_
 # 熄屏
 r = Rig({"idle": 30}); r.msg(k="time", t=1791449340, z=480); r.run(100)
 r.run(31000); check("auto sleep", r.app.sleeping)
+check("screen off: backlight 0 + panel off", r.lcd.bl == 0 and r.lcd.disp is False, (r.lcd.bl, getattr(r.lcd, "disp", None)))
 r.press(K_UP, 80); r.run(400); check("wake on press", not r.app.sleeping)
+check("wake restores backlight+panel", r.lcd.bl == 80 and r.lcd.disp is True, (r.lcd.bl, r.lcd.disp))
 check("waking key swallowed (stay home)", r.app.cur_id == "home")
 # 設定
 r = Rig(); a = r.app; a.go("settings"); r.run(100)
-r.click(K_RIGHT); check("setting h24 toggled", r.st.cfg.get("h24") == 0)
+r.click(K_RIGHT); check("setting h24 toggled", r.st.cfg.get("h24") == 1)
 # 遊戲邏輯
 import random
 random.seed(1)
@@ -124,4 +126,80 @@ s.step(); check("snake eats", s.score == 1 and len(s.body) == 4)
 s.body = [(10, 5), (9, 5), (9, 6), (10, 6), (11, 6), (11, 5)]; s.dir = (0, 1); s.turn = []
 s.body = [(10, 5), (10, 6), (11, 6), (11, 5), (11, 4), (10, 4)]
 s.dir = (1, 0); s.step(); check("snake self collision", s.over)
+
+# ---------- 首頁控制音樂 ----------
+r = Rig(); r.msg(k="time", t=1791449340, z=480); r.msg(k="ping")
+r.msg(k="track", t="晴天", a="周杰倫", d=269000); r.msg(k="play", s=1, p=83000, v=100); r.msg(k="vol", v=9, m=15, mu=0)
+r.run(200); a = r.app
+check("home start", a.cur_id == "home")
+r.link.sent.clear(); r.click(K_CENTER); check("home center -> pp", r.link.sent == [{"c": "pp"}], r.link.sent)
+r.link.sent.clear(); r.double(K_CENTER); check("home center double -> mute", r.link.sent == [{"c": "mute"}] and a.cur_id == "home", r.link.sent)
+r.link.sent.clear(); r.click(K_UP); check("home up -> vol+1", r.link.sent == [{"c": "vol", "d": 1}], r.link.sent)
+r.link.sent.clear(); r.click(K_DOWN); check("home down -> vol-1", r.link.sent == [{"c": "vol", "d": -1}], r.link.sent)
+r.link.sent.clear(); r.double(K_UP); check("home up double -> shuffle", r.link.sent == [{"c": "shuffle", "v": 1}], r.link.sent)
+r.link.sent.clear(); r.double(K_DOWN); check("home down double -> repeat", r.link.sent == [{"c": "repeat", "v": 1}], r.link.sent)
+r.link.sent.clear(); r.double(K_RIGHT); check("home right double -> next (stay home)", r.link.sent == [{"c": "next"}] and a.cur_id == "home", (r.link.sent, a.cur_id))
+r.link.sent.clear(); r.double(K_LEFT); check("home left double -> prev", r.link.sent == [{"c": "prev"}], r.link.sent)
+r.link.sent.clear(); r.hold(K_RIGHT, 2000)
+check("home right hold -> seeks only", len([m for m in r.link.sent if m.get("c") == "seek"]) >= 5 and all(m.get("c") == "seek" for m in r.link.sent) and a.cur_id == "home", (a.cur_id, r.link.sent[:3]))
+r.link.sent.clear(); r.click(K_RIGHT); check("home right click -> page switch, no command", a.cur_id == "sw" and r.link.sent == [], (a.cur_id, r.link.sent))
+r.click(K_LEFT); check("back to home", a.cur_id == "home")
+r.link.is_online = False; r.link.sent.clear()
+r.link.send = lambda d: False
+r.click(K_CENTER); check("offline toast", a._toast == "手機未連線", a._toast)
+
+
+# ===== v0.8 =====
+from power import A, D, L, O
+r = Rig({"tsecs": 0}); r.msg(k="time", t=1791449340, z=480); r.run(100); a = r.app
+check("default 12h + home secs on + topbar secs off", r.st.cfg.get("h24") == 0 and r.st.cfg.get("secs") == 1 and r.st.cfg.get("tsecs") == 0)
+check("active backlight 80", r.lcd.bl == 80, r.lcd.bl)
+r.run(61000); check("dim after 60s", a.pm.state == D and r.lcd.bl == 40, (a.pm.state, r.lcd.bl))
+r.press(K_UP, 80); r.run(300); check("press back to active", a.pm.state == A and r.lcd.bl == 80)
+# 低亮度: 沒播歌 -> 切首頁大時鐘, 按鍵喚醒回原頁
+a.go("sw"); r.run(100)
+r.run(601000); check("low 15% + clock page", a.pm.state == L and r.lcd.bl == 15 and a.cur_id == "home", (a.pm.state, r.lcd.bl, a.cur_id))
+r.press(K_CENTER, 80); r.run(300)
+check("wake -> back to stopwatch, key swallowed", a.cur_id == "sw" and a.pm.state == A and not r.st.sw_run, (a.cur_id, a.pm.state))
+# 播歌中低亮度: 不換頁
+a.go("music"); r.msg(k="track", t="Song", a="A", b="", app="x", d=100000); r.msg(k="play", s=1, p=0, v=100); r.run(100)
+r.run(601000); check("playing: low but stay on music", a.pm.state == L and a.cur_id == "music", (a.pm.state, a.cur_id))
+# 手機開始播放 -> 喚醒
+r.msg(k="play", s=2, p=1000, v=100); r.run(100); r.msg(k="play", s=1, p=1000, v=100); r.run(200)
+check("phone starts playing -> wake", a.pm.state == A, a.pm.state)
+# 狀態欄播放圖示 (像素偵測: 有播放時右上區域比暫停多出內容)
+a.go("home"); r.run(200); r.shot("pl_on", "/tmp")
+f1 = bytes(r.lcd.frame)
+r.msg(k="play", s=2, p=1000, v=100); r.run(200); r.shot("pl_off", "/tmp")
+check("topbar play icon appears only when playing", f1 != bytes(r.lcd.frame))
+# 碼表捲動
+a.go("sw"); r.run(100); r.st.sw_acc = 5000; r.st.sw_run = True; r.st.sw_t = clock.now if False else r.st.sw_t
+r.click(K_CENTER) if not r.st.sw_run else None
+r.st.sw_laps = [1000 * (i + 1) for i in range(8)]; a.cur.dirty = True; r.run(100)
+r.hold(K_UP, 1500)
+check("stopwatch long up scrolls laps", a.cur.top < 6 and not a.cur.follow, (a.cur.top, a.cur.follow))
+r.hold(K_DOWN, 3500)
+check("stopwatch long down returns to latest", a.cur.top == 6 and a.cur.follow, (a.cur.top, a.cur.follow))
+# 1A2B 捲動
+a.go("ab"); r.run(100); p = a.cur
+for n in range(1, 9):
+    p.guess = [n, (n + 1) % 10, (n + 2) % 10, (n + 3) % 10]; r.click(K_CENTER)
+check("ab history auto-follows latest", p.scroll == 3, p.scroll)
+r.hold(K_UP, 1500); check("ab long up scrolls history", p.scroll < 3, p.scroll)
+g0 = list(p.guess); r.click(K_UP); check("ab click up still changes digit", p.guess != g0)
+# 隨機取數
+a.go("rand"); r.run(100); p = a.cur
+p.dg = [0, 0, 0, 0, 1, 0, 0, 5]; p.uniq = 1; r.click(K_CENTER)
+check("rand unique 5 in 0..10", p.res is not None and len(set(p.res)) == 5 and all(0 <= v <= 10 for v in p.res), p.res)
+p.dg = [0, 0, 0, 0, 0, 3, 0, 9]; r.click(K_CENTER); p.res = None; r.click(K_CENTER)
+check("rand unique clamped to range size", len(p.res) == 4 and len(set(p.res)) == 4, p.res)
+p.dg = [0, 0, 0, 9, 9, 9, 6, 0]; p.res = None; r.click(K_CENTER)
+check("rand 60 results scroll", p.rows() > 4); t0 = p.top; r.click(K_DOWN); check("rand down scrolls", p.top == t0 + 1)
+r.hold(K_DOWN, 3000); check("rand hold scroll to end", p.top == p.rows() - 4, (p.top, p.rows()))
+r.double(K_CENTER); check("rand result double -> setup", p.res is None)
+check("rand settings persisted", r.st.cfg.get("rnd")[2] == 60, r.st.cfg.get("rnd"))
+r = Rig({"dimt": 15, "lowt": 30, "idle": 120}); r.msg(k="time", t=1791449340, z=480); r.run(100); a = r.app
+r.run(16000); check("custom dim 15s", a.pm.state == D, a.pm.state)
+r.run(15000); check("custom low 30s", a.pm.state == L, a.pm.state)
+r.run(90000); check("custom off 120s", a.pm.state == O, a.pm.state)
 print("\n%d failures" % len(fails)); sys.exit(1 if fails else 0)

@@ -10,10 +10,12 @@ class LCD:
         self.dc = Pin(PIN_DC, Pin.OUT, value=0)
         self.rst = Pin(PIN_RST, Pin.OUT, value=1)
         self.bl = None
+        self.pwm = None
         try:                                   # GPIO11 在部分核心板上是 flash 電源腳, 失敗就算了(背光常亮)
             self.bl = Pin(PIN_BL, Pin.OUT, value=1)
         except Exception:
             self.bl = None
+        self._pct = 100
         self.spi = self._make_spi()
         self.orient = orient
         self.bgr = bgr
@@ -83,12 +85,45 @@ class LCD:
             self.inv = inv
         self.apply_mode()
 
-    def backlight(self, on):
-        if self.bl is not None:
+    def set_bl(self, pct):
+        """背光亮度 0~100 (PWM 調光; PWM 不可用時退回開/關)"""
+        pct = max(0, min(100, pct))
+        self._pct = pct
+        if self.bl is None:
+            return
+        try:
+            if self.pwm is None and 0 < pct < 100:
+                from machine import PWM
+                self.pwm = PWM(self.bl, freq=1000)
+            if self.pwm is not None:
+                try:
+                    self.pwm.duty_u16(pct * 65535 // 100)
+                except AttributeError:
+                    self.pwm.duty(pct * 1023 // 100)
+                if pct in (0, 100):             # 全暗/全亮改回一般輸出, 確實拉高/拉低
+                    self.pwm.deinit()
+                    self.pwm = None
+                    self.bl = Pin(PIN_BL, Pin.OUT, value=1 if pct else 0)
+            else:
+                self.bl(1 if pct else 0)
+        except Exception:
             try:
-                self.bl(1 if on else 0)
+                self.bl(1 if pct else 0)
             except Exception:
                 pass
+
+    def backlight(self, on):
+        self.set_bl(100 if on else 0)
+
+    def display(self, on):
+        """面板本身開關: 關閉時送 DISPOFF + SLEEPIN (背光卡住時也能黑屏省電)"""
+        if on:
+            self.cmd(0x11)
+            time.sleep_ms(120)
+            self.cmd(0x29)
+        else:
+            self.cmd(0x28)
+            self.cmd(0x10)
 
     def show(self, buf):
         x0, y0 = PANELS[self.panel % len(PANELS)]

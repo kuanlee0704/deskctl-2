@@ -14,10 +14,14 @@ time.ticks_ms = lambda: clock.now & 0x3FFFFFFF
 time.ticks_diff = lambda a, b: ((a - b + 2**29) % 2**30) - 2**29
 time.ticks_add = lambda a, b: (a + b) & 0x3FFFFFFF
 time.sleep_ms = lambda ms: None
+import gc as _gc
+_gc.mem_free = lambda: 100000
+_gc.mem_alloc = lambda: 50000
 
 import numpy as np
 from PIL import Image
 import config, keys as K
+config.BL_CONTROL = True      # 模擬器測試背光狀態機
 from gfx import Font, Canvas
 import state as S
 
@@ -30,6 +34,8 @@ class FakeLCD:
         self.frame = bytes(buf)
         self.frames += 1
     def backlight(self, on): pass
+    def set_bl(self, pct): self.bl = pct
+    def display(self, on): self.disp = on
     def png(self, path, scale=4):
         a = np.frombuffer(self.frame, dtype=">u2").reshape(80, 160).astype(np.uint32)
         r = ((a >> 11) & 31) << 3; g = ((a >> 5) & 63) << 2; b = (a & 31) << 3

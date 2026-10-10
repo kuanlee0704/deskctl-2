@@ -5,10 +5,19 @@ from config import *
 
 
 def boot():
+    import gc
+    # 藍牙控制器要最先開, 趁記憶體還沒被畫面/字型緩衝區佔走
+    try:
+        import bluetooth
+        bluetooth.BLE().active(True)
+        print("bt early ok, reset cause", machine.reset_cause())
+    except Exception as e:
+        print("bt early fail:", e, "reset cause", machine.reset_cause())
     from gfx import Font, Canvas
     from lcd import LCD
     from keys import Keys
     from state import State
+    gc.collect()
     st = State()
     cfg = st.cfg
     print("DeskCtl v" + VERSION, cfg.d)
@@ -21,15 +30,25 @@ def boot():
         import calib
         calib.run(lcd, c, keys, cfg)
         del sys.modules["calib"]
+        del calib
+        gc.collect()
+    from ble import NullLink
+    from app import App
+    app = App(c, lcd, keys, NullLink(), st, time.ticks_ms(), machine.reset)   # 先建好 UI 與大緩衝區
+    gc.collect()
     try:
         from ble import Link
-        link = Link()
+        app.link = Link()
+        if cfg.get("btrst"):
+            cfg.set("btrst", 0)
     except Exception as e:                      # 沒有藍牙也能開機
         sys.print_exception(e)
-        from ble import NullLink
-        link = NullLink()
-    from app import App
-    app = App(c, lcd, keys, link, st, time.ticks_ms(), machine.reset)
+        if not cfg.get("btrst"):                # 藍牙卡住 -> 硬重啟一次 (只試一次, 避免無限重啟)
+            cfg.set("btrst", 1)
+            time.sleep_ms(200)
+            machine.reset()
+    gc.collect()
+    print("mem free", gc.mem_free(), "alloc", gc.mem_alloc())
     return app, lcd, c
 
 
@@ -57,19 +76,37 @@ def show_error(lcd, c, e):
 
 
 def run():
+    import gc
+    try:
+        import micropython
+        micropython.alloc_emergency_exception_buf(100)
+    except Exception:
+        pass
     app = lcd = c = None
+    mem_errs = []
     try:
         app, lcd, c = boot()
         while True:
-            app.step(time.ticks_ms())
-            time.sleep_ms(8)
+            try:
+                app.step(time.ticks_ms())
+            except MemoryError:
+                # 記憶體不足: 先整理再繼續; 10 秒內連續 8 次才重啟
+                gc.collect()
+                now = time.ticks_ms()
+                mem_errs.append(now)
+                while mem_errs and time.ticks_diff(now, mem_errs[0]) > 10000:
+                    mem_errs.pop(0)
+                print("MemoryError", gc.mem_free())
+                if len(mem_errs) >= 8:
+                    raise
+            app.pm.nap()
     except KeyboardInterrupt:
         raise
     except Exception as e:
         sys.print_exception(e)
         if lcd is not None:
             show_error(lcd, c, e)
-        time.sleep(8)
+        time.sleep(3)
         machine.reset()
 
 

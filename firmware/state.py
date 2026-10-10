@@ -8,8 +8,8 @@ from config import *
 
 DEFAULTS = {
     "orient": 0, "panel": 0, "bgr": 1, "inv": 1, "calib": 0,
-    "h24": 1, "secs": 0, "idle": 0, "seek": 5, "vstep": 1,
-    "ring": ["home", "sw", "music"], "hi": 0, "chips": 100,
+    "h24": 0, "secs": 1, "tsecs": 0, "idle": 0, "bright": 80, "pwr": 1, "dimt": 60, "lowt": 600, "lsleep": 0, "seek": 5, "vstep": 1,
+    "ring": ["home", "sw", "music"], "hi": 0, "chips": 100, "rnd": [0, 999, 5, 1],
 }
 
 

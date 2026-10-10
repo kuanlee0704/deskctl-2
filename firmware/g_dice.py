@@ -17,7 +17,7 @@ class DicePage(Page):
 
     def __init__(self, app):
         Page.__init__(self, app)
-        self.chips = 100
+        self.chips = self.st.cfg.get("chips") or 100
         self.bet = 10
         self.dice = [1, 1, 1]
         self.msg = "上:押大  下:押小"
@@ -27,6 +27,7 @@ class DicePage(Page):
 
     def on_reset(self, now):
         self.chips = 100
+        self.st.cfg.set("chips", 100)
         self.bet = 10
         self.msg = "已重設籌碼"
         self.msg_col = DIM
@@ -64,6 +65,7 @@ class DicePage(Page):
             self.chips = 0
             self.msg, self.msg_col = "破產了 中央:重來", WARN
         self.bet = max(10, min(self.bet, self.chips)) if self.chips else 10
+        self.st.cfg.set("chips", self.chips if self.chips else 100)
 
     def on_key(self, k, ev, now):
         self.dirty = True

@@ -5,6 +5,7 @@ from keys import *
 from ui import *
 
 COLS, ROWS, CS = 40, 16, 4
+_DIRS = {K_LEFT: (-1, 0), K_RIGHT: (1, 0), K_UP: (0, -1), K_DOWN: (0, 1)}
 OY = 14
 
 
@@ -60,7 +61,7 @@ class SnakePage(Page):
                 return True
             return ev in (EV_PRESS, EV_RELEASE)
         if ev == EV_PRESS and not self.over and not self.paused:
-            d = {K_LEFT: (-1, 0), K_RIGHT: (1, 0), K_UP: (0, -1), K_DOWN: (0, 1)}.get(k)
+            d = _DIRS.get(k)
             if d and len(self.turn) < 2:
                 last = self.turn[-1] if self.turn else self.dir
                 if (d[0] + last[0], d[1] + last[1]) != (0, 0) and d != last:
