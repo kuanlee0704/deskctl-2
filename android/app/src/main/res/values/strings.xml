@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">桌邊控制器</string>
+    <string name="acc_desc">讓「捷徑」能在你按下桌邊控制器時, 替你點擊畫面或按返回。不會讀取或上傳畫面內容。</string>
 </resources>

@@ -45,6 +45,7 @@ class BridgeService : Service() {
         const val ACTION_FORGET = "tw.deskctl.FORGET"
         const val ACTION_RECONNECT = "tw.deskctl.RECONNECT"
         const val ACTION_SYNC = "tw.deskctl.SYNC"
+        const val ACTION_RUN = "tw.deskctl.RUN"        // extra "i" = 捷徑編號 (手機上測試執行用)
         private const val CHANNEL = "bridge"
         private const val NOTIF_ID = 1
         private const val DEVICE_NAME = "DeskCtl"
@@ -147,6 +148,10 @@ class BridgeService : Service() {
             ACTION_RECONNECT -> {
                 AppLog.i(TAG, "手動重新連線")
                 if (inited) { stopScan(); closeGatt(); connectFails = 0; scheduleConnect(100) }
+            }
+            ACTION_RUN -> {
+                val i = intent?.getIntExtra("i", -1) ?: -1
+                if (inited && i >= 0) handleCmd(JSONObject().put("c", "run").put("i", i))
             }
             ACTION_SYNC -> {
                 if (inited && ready) {

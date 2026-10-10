@@ -105,6 +105,9 @@ class State:
         self.route_name = ""
         self.shuffle = 0
         self.repeat = 0          # 0 不循環 1 清單循環 2 單曲循環
+        # 捷徑 (手機端設定, 名單由手機傳來)
+        self.acts = []
+        self.act_ev = None       # (狀態, 名稱, 訊息) 最近一次手機回報, App 會轉成提示
         # 碼表
         self.sw_run = False
         self.sw_t = 0
@@ -188,6 +191,10 @@ class State:
             r = m.get("r", "")
             self.route = {"spk": RT_SPK, "bt": RT_BT, "wired": RT_WIRED}.get(r, RT_NONE)
             self.route_name = m.get("n", "")
+        elif k == "acts":
+            self.acts = [str(x) for x in m.get("l", [])][:16]
+        elif k == "act":
+            self.act_ev = (m.get("s", ""), m.get("n", ""), m.get("m", ""))
         elif k == "mode":
             self.shuffle = m.get("sh", 0)
             self.repeat = m.get("rp", 0)

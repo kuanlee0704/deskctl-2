@@ -54,6 +54,7 @@ class MainActivity : Activity() {
     private val h = Handler(Looper.getMainLooper())
     private var pendingStart = false
     private var tab = 0
+    private lateinit var shortcutsPage: ShortcutsPage
 
     // 版面
     private lateinit var content: FrameLayout
@@ -83,7 +84,8 @@ class MainActivity : Activity() {
     private class SetupItem(
         val title: String, val hint: String, val done: () -> Boolean,
         val btn: String, val action: () -> Unit,
-        val btn2: String? = null, val action2: (() -> Unit)? = null
+        val btn2: String? = null, val action2: (() -> Unit)? = null,
+        val optional: Boolean = false
     ) {
         lateinit var row: LinearLayout
         lateinit var mark: TextView
@@ -109,7 +111,9 @@ class MainActivity : Activity() {
         content = FrameLayout(this)
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
 
+        shortcutsPage = ShortcutsPage(this)
         pages.add(buildHome())
+        pages.add(shortcutsPage.view)
         pages.add(buildLog())
         pages.add(buildSettings())
         for (p in pages) content.addView(p, FrameLayout.LayoutParams(-1, -1))
@@ -118,7 +122,7 @@ class MainActivity : Activity() {
         bar.orientation = LinearLayout.HORIZONTAL
         bar.setBackgroundColor(C_CARD)
         bar.elevation = dp(8).toFloat()
-        val names = arrayOf("主頁", "記錄", "設定")
+        val names = arrayOf("主頁", "捷徑", "記錄", "設定")
         for (i in names.indices) {
             val t = TextView(this)
             t.text = names[i]
@@ -224,7 +228,7 @@ class MainActivity : Activity() {
 
         setupBanner = card(col, 0xFFFFF3E0.toInt())
         tvBanner = text(setupBanner, "", 14f, C_TEXT)
-        button(setupBanner, "前往設定") { select(2) }
+        button(setupBanner, "前往設定") { select(3) }
 
         statusCard = card(col, C_GREY)
         tvState = text(statusCard, "", 26f, Color.WHITE, true)
@@ -280,7 +284,7 @@ class MainActivity : Activity() {
         if (bg is GradientDrawable) bg.setColor(if (running) C_BAD else C_PRIMARY)
         btnReconnect.visibility = if (running) View.VISIBLE else View.GONE
 
-        val missing = setupItems.filter { !it.done() }
+        val missing = setupItems.filter { !it.optional && !it.done() }
         if (missing.isEmpty()) {
             setupBanner.visibility = View.GONE
         } else {
@@ -371,7 +375,7 @@ class MainActivity : Activity() {
         val setup = card(col)
         setupHeader = text(setup, "", 16f, C_TEXT, true)
         setupHeader.setOnClickListener {
-            setupOpen = !(setupOpen ?: setupItems.any { !it.done() })
+            setupOpen = !(setupOpen ?: setupItems.any { !it.optional && !it.done() })
             refresh()
         }
         setupBody = LinearLayout(this)
@@ -400,6 +404,24 @@ class MainActivity : Activity() {
                 },
                 "開啟",
                 { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+            )
+        )
+        setupItems.add(
+            SetupItem(
+                "顯示在其他 App 上層 (捷徑用)", "讓捷徑能從背景開啟 App / 網址。只用捷徑功能才需要。",
+                { Launcher.overlayOk(this) }, "開啟",
+                { startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))) },
+                optional = true
+            )
+        )
+        setupItems.add(
+            SetupItem(
+                "無障礙服務 (捷徑的點擊步驟用)", "「點擊畫面/點擊文字/返回」步驟需要; 開啟後在清單中找「桌邊控制器」。不讀取畫面內容。",
+                { Launcher.accessibilityOn(this) }, "開啟",
+                { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+                "若無法勾選: 允許受限設定 (App 資訊 → ⋮)",
+                { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) },
+                optional = true
             )
         )
         for (it in setupItems) addSetupRow(it)
@@ -453,7 +475,7 @@ class MainActivity : Activity() {
         mark.textSize = 18f
         top.addView(mark, LinearLayout.LayoutParams(dp(30), -2))
         val t = TextView(this)
-        t.text = it.title
+        t.text = it.title + (if (it.optional) "  (選用)" else "")
         t.textSize = 15f
         t.setTextColor(C_TEXT)
         top.addView(t, LinearLayout.LayoutParams(0, -2, 1f))
@@ -482,16 +504,17 @@ class MainActivity : Activity() {
     }
 
     private fun updateSettings() {
-        val doneCount = setupItems.count { it.done() }
-        val all = doneCount == setupItems.size
+        val req = setupItems.filter { !it.optional }
+        val doneCount = req.count { it.done() }
+        val all = doneCount == req.size
         val open = setupOpen ?: !all
-        setupHeader.text = (if (all) "✔ 初次設定已完成" else "初次設定 ($doneCount/${setupItems.size})") +
+        setupHeader.text = (if (all) "✔ 初次設定已完成" else "初次設定 ($doneCount/${req.size})") +
             (if (open) "  ▲" else "  ▼ 點開檢查")
         setupBody.visibility = if (open) View.VISIBLE else View.GONE
         for (it in setupItems) {
             val ok = it.done()
-            it.mark.text = if (ok) "✔" else "✘"
-            it.mark.setTextColor(if (ok) C_OK else C_BAD)
+            it.mark.text = if (ok) "✔" else if (it.optional) "○" else "✘"
+            it.mark.setTextColor(if (ok) C_OK else if (it.optional) C_GREY else C_BAD)
             // 做完的項目把按鈕收起來, 版面更清爽 (按鈕在 row 的第 3 個之後)
             for (k in 2 until it.row.childCount) it.row.getChildAt(k).visibility = if (ok) View.GONE else View.VISIBLE
         }
@@ -561,7 +584,8 @@ class MainActivity : Activity() {
     private fun refresh() {
         updateHome()
         updateSettings()
-        if (tab == 1) updateLog()
+        if (tab == 1) shortcutsPage.refresh()
+        if (tab == 2) updateLog()
         h.removeCallbacksAndMessages(null)
         h.postDelayed({ refresh() }, 1000)
     }

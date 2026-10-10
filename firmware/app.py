@@ -213,6 +213,18 @@ class App:
             i = 0
         self.go(ring[i])
 
+    def act_toast(self, ev):
+        s, n, m = ev
+        if s == "run":
+            t = "執行 " + n
+        elif s == "done":
+            t = "完成 " + n
+        elif s == "busy":
+            t = "上一個還沒跑完"
+        else:
+            t = "失敗: " + (m or n)
+        self.toast(ui.clip_text(self.c, t, 138), 2000)
+
     def toast(self, text, ms=1300):
         self._toast = text
         self._toast_until = time.ticks_add(time.ticks_ms(), ms)
@@ -279,6 +291,10 @@ class App:
         for m in self.link.poll(now):
             was = self.st.pl
             self.st.apply(m, now)
+            ev = self.st.act_ev
+            if ev is not None:
+                self.st.act_ev = None
+                self.act_toast(ev)
             if self.st.pl == PL_PLAY and was != PL_PLAY:
                 self.idle_t = now                  # 手機開始播放 -> 喚醒
             self.cur.dirty = True

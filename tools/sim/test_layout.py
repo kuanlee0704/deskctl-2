@@ -263,6 +263,15 @@ for lo, hi, n, uq in ((0, 9, 5, 1), (0, 999, 5, 1), (0, 999, 20, 0), (100, 200, 
         assert len(set(p.res)) == len(p.res), "unique violated"
     assert all(min(lo, hi) <= v <= max(lo, hi) for v in p.res)
 
+# ---------- 捷徑 ----------
+r = mk(); r.app.go("act", clock.now); snap(r, "act empty")
+for names in (["A"], ["Samsung Music 播放", "Brave YouTube", "第三個很長很長很長很長很長很長的捷徑名稱", "d", "e", "f"]):
+    r.msg(k="acts", l=names); r.run(100)
+    for i in range(7):
+        snap(r, "act n=%d sel=%d" % (len(names), i)); r.click(K_DOWN)
+for ev in (("run", "很長很長很長很長很長很長很長的捷徑名稱", ""), ("fail", "x", "需要開啟無障礙服務"), ("busy", "", "")):
+    r.msg(k="act", s=ev[0], n=ev[1], m=ev[2]); r.run(100); snap(r, "act toast " + ev[0])
+
 # ---------- 設定 toast ----------
 r = mk(); r.app.go("sw", clock.now); r.app.toast("先暫停才能重設"); snap(r, "sw toast")
 

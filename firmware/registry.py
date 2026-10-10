@@ -6,6 +6,7 @@ PAGES = (
     ("sw", "碼表", "p_stopwatch", "StopwatchPage", "main"),
     ("music", "音樂", "p_music", "MusicPage", "main"),
     ("games", "遊戲", "p_games", "GamesPage", "main"),
+    ("act", "捷徑", "p_shortcuts", "ShortcutsPage", "main"),
     ("manual", "說明書", "p_manual", "ManualPage", "main"),
     ("settings", "快捷設定", "p_settings", "SettingsPage", "main"),
     # --- 遊戲 ---

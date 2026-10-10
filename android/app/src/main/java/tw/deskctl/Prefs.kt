@@ -26,4 +26,8 @@ object Prefs {
     /** 服務是否「被使用者啟動」(按停止會變 false, 開機自動啟動以此為準) */
     fun wasStarted(c: Context): Boolean = sp(c).getBoolean("was_started", false)
     fun setWasStarted(c: Context, v: Boolean) { sp(c).edit().putBoolean("was_started", v).apply() }
+
+    /** 捷徑清單 (JSON 字串, 格式見 Shortcuts.kt) */
+    fun shortcuts(c: Context): String = sp(c).getString("shortcuts", "[]") ?: "[]"
+    fun setShortcuts(c: Context, v: String) { sp(c).edit().putString("shortcuts", v).apply() }
 }

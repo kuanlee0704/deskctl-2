@@ -10,6 +10,7 @@ object Features {
         FeatureEntry("time", "時間同步") { h -> TimeFeature(h) },
         FeatureEntry("battery", "手機電量") { h -> BatteryFeature(h) },
         FeatureEntry("media", "音樂控制") { h -> MediaFeature(h) },
+        FeatureEntry("shortcut", "捷徑") { h -> ShortcutFeature(h) },
         // 新增功能就加在這裡, 例如: FeatureEntry("weather", "天氣") { h -> WeatherFeature(h) },
     )
 }
