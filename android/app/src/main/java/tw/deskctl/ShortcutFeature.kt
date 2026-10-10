@@ -216,6 +216,7 @@ class ShortcutFeature(host: FeatureHost) : Feature(host) {
         }
         if (left <= 0) {
             AppLog.w("SHORTCUT", "找不到影片項目, 改點畫面 (50%,38%)")
+            DeskAccess.dump("畫面內容")
             val ok = DeskAccess.tap(50f, 38f)
             if (ok) host.handler.postDelayed({ step(sc, idx + 1) }, 800L) else finish(sc, false, "找不到影片")
             return
@@ -240,10 +241,16 @@ class ShortcutFeature(host: FeatureHost) : Feature(host) {
             return
         }
         if (left <= 0) {
+            DeskAccess.dump("畫面內容")
             finish(sc, false, "沒有開始播放")
             return
         }
         AppLog.i("SHORTCUT", "尚未播放, 嘗試喚醒 (剩 " + left + " 次)")
+        if (left == 3) DeskAccess.dump("畫面內容")
+        // 先找播放器上真正的「播放」按鈕 (精準比對), 找不到再補一個真實觸控
+        if (DeskAccess.clickExact("播放", "播放影片", "Play", "Play video", "Resume")) {
+            AppLog.i("SHORTCUT", "點了播放按鈕")
+        }
         DeskAccess.clickAny("取消靜音", "解除靜音", "點按即可取消靜音", "Unmute", "Tap to unmute")
         try {
             (ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager)

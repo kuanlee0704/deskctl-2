@@ -37,6 +37,22 @@ class DeskAccess : AccessibilityService() {
             return false
         }
 
+        /** 精準比對: 文字或說明「整個等於」其中一個才點 (避免「播放」誤點到「播放清單」) */
+        fun clickExact(vararg ts: String): Boolean {
+            val s = instance ?: return false
+            return s.doClickExact(ts)
+        }
+
+        /** 把目前畫面上看得到的項目寫進記錄 (除錯用: 看無障礙服務到底讀到什麼) */
+        fun dump(tag: String) {
+            val s = instance
+            if (s == null) {
+                AppLog.w(tag, "無障礙服務未連線")
+                return
+            }
+            s.doDump(tag)
+        }
+
         /** 點「搜尋結果裡第一部影片」: 找畫面上第一個又寬又高的可點項目 (略過廣告 / Shorts) */
         fun clickFirstVideo(): Boolean {
             val s = instance ?: return false
@@ -130,6 +146,69 @@ class DeskAccess : AccessibilityService() {
         if (best.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
         best.getBoundsInScreen(r)
         return doTap(r.centerX() * 100f / w, r.centerY() * 100f / h)
+    }
+
+    private fun doClickExact(ts: Array<out String>): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val q = ArrayList<AccessibilityNodeInfo>()
+        q.add(root)
+        var n = 0
+        while (q.isNotEmpty() && n < 4000) {
+            val node = q.removeAt(0)
+            n++
+            val a = node.text?.toString()?.trim() ?: ""
+            val b = node.contentDescription?.toString()?.trim() ?: ""
+            if (ts.any { it.equals(a, true) || it.equals(b, true) }) {
+                var c: AccessibilityNodeInfo? = node
+                while (c != null) {
+                    if (c.isClickable) return c.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    c = c.parent
+                }
+            }
+            for (i in 0 until node.childCount) {
+                val ch = node.getChild(i)
+                if (ch != null) q.add(ch)
+            }
+        }
+        return false
+    }
+
+    private fun doDump(tag: String) {
+        val root = rootInActiveWindow
+        if (root == null) {
+            AppLog.w(tag, "讀不到畫面內容 (rootInActiveWindow = null)")
+            return
+        }
+        val dm = realMetrics()
+        val r = android.graphics.Rect()
+        val q = ArrayList<AccessibilityNodeInfo>()
+        q.add(root)
+        var n = 0
+        var shown = 0
+        AppLog.w(tag, "畫面來自 " + (root.packageName ?: "?"))
+        while (q.isNotEmpty() && n < 4000 && shown < 40) {
+            val node = q.removeAt(0)
+            n++
+            val t = (node.text?.toString() ?: "").take(30)
+            val d = (node.contentDescription?.toString() ?: "").take(40)
+            if ((t.isNotEmpty() || d.isNotEmpty() || node.isClickable) && node.isVisibleToUser) {
+                node.getBoundsInScreen(r)
+                if (r.width() > 0 && r.height() > 0) {
+                    shown++
+                    AppLog.w(
+                        tag,
+                        (if (node.isClickable) "[點]" else "[ ]") + " " + t + (if (d.isNotEmpty()) " | " + d else "") +
+                            "  @" + (r.centerX() * 100 / dm.widthPixels) + "," + (r.centerY() * 100 / dm.heightPixels) +
+                            " 寬" + (r.width() * 100 / dm.widthPixels) + "% 高" + (r.height() * 100 / dm.heightPixels) + "%"
+                    )
+                }
+            }
+            for (i in 0 until node.childCount) {
+                val ch = node.getChild(i)
+                if (ch != null) q.add(ch)
+            }
+        }
+        AppLog.w(tag, "共 " + n + " 個節點, 列出 " + shown + " 項")
     }
 
     private fun doClickText(t: String): Boolean {
