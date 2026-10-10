@@ -6,6 +6,7 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaController
+import android.media.session.MediaSession
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.SystemClock
@@ -54,10 +55,13 @@ class MediaFeature(host: FeatureHost) : Feature(host) {
     }
 
     override fun stop() {
-        try {
-            controller?.unregisterCallback(mediaCb)
-        } catch (_: Exception) {
+        for (w in watchers.values.toList()) {
+            try {
+                w.c.unregisterCallback(w)
+            } catch (_: Exception) {
+            }
         }
+        watchers.clear()
         try {
             msm?.removeOnActiveSessionsChangedListener(sessionsCb)
         } catch (_: Exception) {
@@ -75,6 +79,7 @@ class MediaFeature(host: FeatureHost) : Feature(host) {
 
     override fun onTick(n: Int) {
         if (n % 2 == 0) { pushVol(); pushRoute(); pushMode() }
+        if (n % 3 == 0) repick()          // 保險: 即使漏掉回呼, 3 秒內也會切到正在播放的 App
         if (n % 3 == 0 && controller?.playbackState?.state == PlaybackState.STATE_PLAYING) pushPlay()
     }
 
@@ -228,52 +233,84 @@ class MediaFeature(host: FeatureHost) : Feature(host) {
     }
 
     // ---------------- 媒體工作階段 ----------------
-    private fun pickController(list: List<MediaController>?) {
-        val best = list?.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING } ?: list?.firstOrNull()
+    // 同時監聽「所有」媒體工作階段 (Samsung Music、Brave 網頁影片…), 誰開始播放就切過去;
+    // 都沒在播放時, 控制最後一個播放過的 (不是清單第一個)。
+    private val watchers = HashMap<MediaSession.Token, Watcher>()
+    private var lastActive = ""
+
+    private inner class Watcher(val c: MediaController) : MediaController.Callback() {
+        private fun isCurrent() = c.sessionToken == controller?.sessionToken
+
+        override fun onMetadataChanged(metadata: MediaMetadata?) {
+            if (isCurrent()) pushTrack()
+        }
+
+        override fun onPlaybackStateChanged(state: PlaybackState?) {
+            val playing = state?.state == PlaybackState.STATE_PLAYING
+            if (playing) lastActive = c.packageName
+            if (isCurrent()) pushPlay()
+            if (playing || !isCurrent()) repick()
+        }
+
+        override fun onSessionDestroyed() {
+            watchers.remove(c.sessionToken)
+            if (isCurrent()) {
+                controller = null
+                compat = null
+                pushTrack(); pushPlay()
+            }
+            repick()
+        }
+    }
+
+    private fun repick() {
+        val mgr = msm
+        val cn = listenerCn
+        if (mgr == null || cn == null) return
+        try {
+            pickController(mgr.getActiveSessions(cn))
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun watchAll(list: List<MediaController>) {
+        val tokens = list.map { it.sessionToken }
+        for (t in watchers.keys.toList()) {
+            if (t !in tokens) {
+                try {
+                    watchers.remove(t)?.let { it.c.unregisterCallback(it) }
+                } catch (_: Exception) {
+                }
+            }
+        }
+        for (c in list) {
+            if (!watchers.containsKey(c.sessionToken)) {
+                val w = Watcher(c)
+                watchers[c.sessionToken] = w
+                c.registerCallback(w, host.handler)
+            }
+        }
+    }
+
+    private fun pickController(list0: List<MediaController>?) {
+        val list = list0 ?: emptyList()
+        watchAll(list)
+        val playing = list.filter { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+        val best = playing.firstOrNull { it.packageName == lastActive }
+            ?: playing.firstOrNull()
+            ?: list.firstOrNull { it.packageName == lastActive }
+            ?: list.firstOrNull()
+        if (best != null && playing.contains(best)) lastActive = best.packageName
         if (best != null && best.sessionToken == controller?.sessionToken) return
-        controller?.unregisterCallback(mediaCb)
         controller = best
         compat = null
         if (best != null) {
-            best.registerCallback(mediaCb, host.handler)
             try {
                 compat = MediaControllerCompat(ctx, MediaSessionCompat.Token.fromToken(best.sessionToken))
             } catch (_: Exception) {
             }
-            AppLog.i("MEDIA", "控制 " + appLabel(best.packageName))
+            AppLog.i("MEDIA", "控制 " + appLabel(best.packageName) + (if (playing.contains(best)) " (播放中)" else ""))
         }
         pushTrack(); pushPlay(); pushMode()
-    }
-
-    private val mediaCb = object : MediaController.Callback() {
-        override fun onMetadataChanged(metadata: MediaMetadata?) {
-            pushTrack()
-        }
-
-        override fun onPlaybackStateChanged(state: PlaybackState?) {
-            pushPlay()
-            // 另一個 App 開始播放時, 切換過去
-            val mgr = msm
-            val cn = listenerCn
-            if (mgr != null && cn != null && state?.state == PlaybackState.STATE_PLAYING) {
-                try {
-                    pickController(mgr.getActiveSessions(cn))
-                } catch (_: Exception) {
-                }
-            }
-        }
-
-        override fun onSessionDestroyed() {
-            val mgr = msm
-            val cn = listenerCn
-            controller = null
-            if (mgr != null && cn != null) {
-                try {
-                    pickController(mgr.getActiveSessions(cn))
-                } catch (_: Exception) {
-                }
-            }
-            pushTrack(); pushPlay()
-        }
     }
 }

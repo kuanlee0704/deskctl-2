@@ -224,10 +224,10 @@ class ShortcutsPage(private val act: Activity) {
                 val sc = Shortcut("YouTube: " + kw)
                 sc.steps.add(Step("url", "https://m.youtube.com/results?search_query=" + q, pkg))
                 sc.steps.add(Step("wait", "6"))
-                sc.steps.add(Step("tap", "50,40"))
+                sc.steps.add(Step("firstvideo"))
                 list.add(sc)
                 save()
-                toast("第一部影片的位置因手機而異, 請用「▶ 測試」確認, 必要時編輯「點擊畫面」的百分比")
+                toast("會自動點第一部影片; 若點錯, 可把此步驟換成「點擊畫面」並用準星選位置")
                 startEdit(list.size - 1)
             }
         }
@@ -288,7 +288,8 @@ class ShortcutsPage(private val act: Activity) {
     private val stepTypes = arrayOf(
         "開啟 App", "開網址", "等待幾秒", "媒體鍵 (播放/暫停/下一首…)",
         "點擊畫面位置 (需無障礙)", "點擊含某文字的按鈕 (需無障礙)", "按返回 (需無障礙)",
-        "重新整理目前頁面 (需無障礙)", "喚醒螢幕"
+        "重新整理目前頁面 (需無障礙)", "喚醒螢幕",
+        "點第一部影片 (搜尋結果頁, 需無障礙)"
     )
 
     private fun addStep(done: (Step) -> Unit) {
@@ -306,7 +307,8 @@ class ShortcutsPage(private val act: Activity) {
         5 -> "text"
         6 -> "back"
         7 -> "refresh"
-        else -> "wake"
+        8 -> "wake"
+        else -> "firstvideo"
     }
 
     private fun editStep(st: Step, done: (Step) -> Unit) {

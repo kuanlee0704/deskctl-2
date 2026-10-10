@@ -30,13 +30,17 @@ class DeskAccess : AccessibilityService() {
             return s.doSwipe(x1, y1, x2, y2, ms)
         }
 
-        /** 重新整理目前頁面: 先找「重新載入/Reload…」按鈕, 找不到就下拉 */
-        fun refreshPage(): Boolean {
+        /** 依序嘗試多個文字, 點到任何一個就回傳 true */
+        fun clickAny(vararg ts: String): Boolean {
             val s = instance ?: return false
-            for (t in arrayOf("重新載入", "重新整理", "Reload", "Refresh")) {
-                if (s.doClickText(t)) return true
-            }
-            return s.doSwipe(50f, 30f, 50f, 80f, 450L)
+            for (t in ts) if (s.doClickText(t)) return true
+            return false
+        }
+
+        /** 點「搜尋結果裡第一部影片」: 找畫面上第一個又寬又高的可點項目 (略過廣告 / Shorts) */
+        fun clickFirstVideo(): Boolean {
+            val s = instance ?: return false
+            return s.doClickFirstVideo()
         }
 
         fun back(): Boolean {
@@ -92,6 +96,40 @@ class DeskAccess : AccessibilityService() {
             .addStroke(GestureDescription.StrokeDescription(p, 0L, ms))
             .build()
         return dispatchGesture(g, null, null)
+    }
+
+    private fun doClickFirstVideo(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val dm = realMetrics()
+        val w = dm.widthPixels
+        val h = dm.heightPixels
+        val skip = arrayOf("shorts", "短片", "廣告", "sponsor", "ad ·", "赞助", "贊助", "playlist", "播放清單", "mix")
+        val found = ArrayList<Pair<Int, AccessibilityNodeInfo>>()
+        val q = ArrayList<AccessibilityNodeInfo>()
+        q.add(root)
+        var n = 0
+        val r = android.graphics.Rect()
+        while (q.isNotEmpty() && n < 4000) {
+            val node = q.removeAt(0)
+            n++
+            if (node.isClickable && node.isVisibleToUser) {
+                node.getBoundsInScreen(r)
+                val label = ((node.text?.toString() ?: "") + " " + (node.contentDescription?.toString() ?: "")).lowercase()
+                if (r.width() >= w * 0.55 && r.height() >= h * 0.10 && r.top >= h * 0.10 && r.bottom <= h * 0.98 &&
+                    skip.none { label.contains(it) }
+                ) {
+                    found.add(Pair(r.top, node))
+                }
+            }
+            for (i in 0 until node.childCount) {
+                val ch = node.getChild(i)
+                if (ch != null) q.add(ch)
+            }
+        }
+        val best = found.minByOrNull { it.first }?.second ?: return false
+        if (best.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+        best.getBoundsInScreen(r)
+        return doTap(r.centerX() * 100f / w, r.centerY() * 100f / h)
     }
 
     private fun doClickText(t: String): Boolean {

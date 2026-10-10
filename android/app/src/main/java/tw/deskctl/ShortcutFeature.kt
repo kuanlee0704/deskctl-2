@@ -124,9 +124,20 @@ class ShortcutFeature(host: FeatureHost) : Feature(host) {
                 }
                 "media" -> ok = mediaKey(st.a)
                 "refresh" -> {
-                    ok = DeskAccess.refreshPage()
-                    if (!ok) msg = "需要開啟無障礙服務"
-                    delay = 1500L
+                    if (DeskAccess.instance == null) {
+                        finish(sc, false, "需要開啟無障礙服務")
+                    } else {
+                        refreshStep(sc, idx, 0)
+                    }
+                    return
+                }
+                "firstvideo" -> {
+                    if (DeskAccess.instance == null) {
+                        finish(sc, false, "需要開啟無障礙服務")
+                    } else {
+                        firstVideo(sc, idx, 10)
+                    }
+                    return
                 }
                 "wake" -> {
                     wakeScreen()
@@ -150,6 +161,62 @@ class ShortcutFeature(host: FeatureHost) : Feature(host) {
             return
         }
         host.handler.postDelayed({ step(sc, idx + 1) }, delay)
+    }
+
+    private val RELOAD = arrayOf("重新載入", "重新整理", "Reload", "Refresh")
+    private val MENU = arrayOf("更多選項", "更多", "選單", "More options", "More", "Menu")
+
+    /** 重新整理: 0 直接找「重新載入」鈕 → 1 打開選單再找 → 2 先捲到頂再慢速下拉 */
+    private fun refreshStep(sc: Shortcut, idx: Int, stage: Int) {
+        val next = { host.handler.postDelayed({ step(sc, idx + 1) }, 1500L) }
+        when (stage) {
+            0 -> {
+                if (DeskAccess.clickAny(*RELOAD)) {
+                    AppLog.i("SHORTCUT", "重新整理: 點了「重新載入」")
+                    next()
+                } else refreshStep(sc, idx, 1)
+            }
+            1 -> {
+                if (DeskAccess.clickAny(*MENU)) {
+                    host.handler.postDelayed({
+                        if (DeskAccess.clickAny(*RELOAD)) {
+                            AppLog.i("SHORTCUT", "重新整理: 從選單點了「重新載入」")
+                            next()
+                        } else {
+                            DeskAccess.back()          // 關掉選單, 改用下拉
+                            host.handler.postDelayed({ refreshStep(sc, idx, 2) }, 500L)
+                        }
+                    }, 800L)
+                } else refreshStep(sc, idx, 2)
+            }
+            else -> {
+                AppLog.i("SHORTCUT", "重新整理: 找不到按鈕, 改用下拉")
+                DeskAccess.swipe(50f, 30f, 50f, 80f, 250L)           // 先捲到頁面最上面
+                host.handler.postDelayed({
+                    DeskAccess.swipe(50f, 30f, 50f, 80f, 250L)
+                    host.handler.postDelayed({
+                        val ok = DeskAccess.swipe(50f, 25f, 50f, 75f, 900L)    // 慢速下拉 = 重新整理
+                        if (ok) next() else finish(sc, false, "下拉失敗")
+                    }, 700L)
+                }, 700L)
+            }
+        }
+    }
+
+    /** 點第一部影片: 頁面可能還在載入, 每秒重試; 找不到就點畫面 (50%,38%) */
+    private fun firstVideo(sc: Shortcut, idx: Int, left: Int) {
+        if (DeskAccess.clickFirstVideo()) {
+            AppLog.i("SHORTCUT", "已點第一部影片")
+            host.handler.postDelayed({ step(sc, idx + 1) }, 800L)
+            return
+        }
+        if (left <= 0) {
+            AppLog.w("SHORTCUT", "找不到影片項目, 改點畫面 (50%,38%)")
+            val ok = DeskAccess.tap(50f, 38f)
+            if (ok) host.handler.postDelayed({ step(sc, idx + 1) }, 800L) else finish(sc, false, "找不到影片")
+            return
+        }
+        host.handler.postDelayed({ firstVideo(sc, idx, left - 1) }, 1000L)
     }
 
     private fun retryClick(sc: Shortcut, idx: Int, text: String, left: Int) {

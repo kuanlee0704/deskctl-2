@@ -86,6 +86,7 @@ object Shortcuts {
         "back" -> "按返回"
         "refresh" -> "重新整理目前頁面"
         "wake" -> "喚醒螢幕"
+        "firstvideo" -> "點第一部影片"
         else -> s.type
     }
 }
