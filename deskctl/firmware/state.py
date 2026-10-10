@@ -1,0 +1,193 @@
+"""全域狀態: 設定、手機資訊、時間、碼表。"""
+import time
+try:
+    import ujson as json
+except ImportError:
+    import json
+from config import *
+
+DEFAULTS = {
+    "orient": 0, "panel": 0, "bgr": 1, "inv": 1, "calib": 0,
+    "h24": 0, "secs": 1, "tsecs": 0, "idle": 0, "bright": 80, "pwr": 1, "dimt": 60, "lowt": 600, "lsleep": 0, "seek": 5, "vstep": 1,
+    "ring": ["home", "sw", "music"], "hi": 0, "chips": 100, "rnd": [0, 999, 5, 1],
+}
+
+
+class Settings:
+    def __init__(self):
+        self.d = dict(DEFAULTS)
+        try:
+            with open(SETTINGS_FILE) as f:
+                self.d.update(json.load(f))
+        except Exception:
+            pass
+        self._dirty = False
+
+    def get(self, k):
+        return self.d.get(k, DEFAULTS.get(k))
+
+    def set(self, k, v, save=True):
+        self.d[k] = v
+        self._dirty = True
+        if save:
+            self.save()
+
+    def save(self):
+        if not self._dirty:
+            return
+        try:
+            with open(SETTINGS_FILE, "w") as f:
+                json.dump(self.d, f)
+            self._dirty = False
+        except Exception:
+            pass
+
+    def reset(self):
+        self.d = dict(DEFAULTS)
+        self._dirty = True
+        self.save()
+
+
+_DAYS = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+
+
+def civil(unix_secs):
+    """Unix 秒 -> (年, 月, 日, 時, 分, 秒, 星期0=週一)"""
+    days, rem = divmod(int(unix_secs), 86400)
+    hh, rem = divmod(rem, 3600)
+    mm, ss = divmod(rem, 60)
+    wd = (days + 3) % 7               # 1970-01-01 是週四
+    z = days + 719468                 # Howard Hinnant 的 civil_from_days
+    era = z // 146097
+    doe = z - era * 146097
+    yoe = (doe - doe // 1460 + doe // 36524 - doe // 146096) // 365
+    y = yoe + era * 400
+    doy = doe - (365 * yoe + yoe // 4 - yoe // 100)
+    mp = (5 * doy + 2) // 153
+    d = doy - (153 * mp + 2) // 5 + 1
+    m = mp + 3 if mp < 10 else mp - 9
+    if m <= 2:
+        y += 1
+    return y, m, d, hh, mm, ss, wd
+
+
+WEEK = ("週一", "週二", "週三", "週四", "週五", "週六", "週日")
+
+# 音樂狀態
+PL_NONE, PL_PLAY, PL_PAUSE = 0, 1, 2
+RT_NONE, RT_SPK, RT_BT, RT_WIRED = 0, 1, 2, 3
+
+
+class State:
+    def __init__(self):
+        self.cfg = Settings()
+        # 時間
+        self.t_synced = False
+        self._t0 = 0
+        self._epoch0 = 0
+        # 手機
+        self.batt = -1
+        self.charging = False
+        self.has_track = False
+        self.title = ""
+        self.artist = ""
+        self.album = ""
+        self.app = ""
+        self.dur = 0
+        self.pl = PL_NONE
+        self._pos = 0
+        self._pos_t = 0
+        self.speed = 1.0
+        self.vol = 0
+        self.vol_max = 15
+        self.muted = False
+        self.route = RT_NONE
+        self.route_name = ""
+        self.shuffle = 0
+        self.repeat = 0          # 0 不循環 1 清單循環 2 單曲循環
+        # 碼表
+        self.sw_run = False
+        self.sw_t = 0
+        self.sw_acc = 0
+        self.sw_laps = []
+
+    # ---- 時間 ----
+    def sync_time(self, unix, tz_min, now):
+        self._epoch0 = int(unix) + int(tz_min) * 60
+        self._t0 = now
+        self.t_synced = True
+
+    def local(self, now):
+        secs = self._epoch0 + time.ticks_diff(now, self._t0) // 1000
+        return civil(secs)
+
+    # ---- 音樂位置 ----
+    def set_pos(self, pos, now):
+        self._pos = pos
+        self._pos_t = now
+
+    def pos(self, now):
+        p = self._pos
+        if self.pl == PL_PLAY:
+            p += int(time.ticks_diff(now, self._pos_t) * self.speed)
+        if self.dur and p > self.dur:
+            p = self.dur
+        return p if p > 0 else 0
+
+    # ---- 碼表 ----
+    def sw_elapsed(self, now):
+        if self.sw_run:
+            return self.sw_acc + time.ticks_diff(now, self.sw_t)
+        return self.sw_acc
+
+    def sw_toggle(self, now):
+        if self.sw_run:
+            self.sw_acc += time.ticks_diff(now, self.sw_t)
+            self.sw_run = False
+        else:
+            self.sw_t = now
+            self.sw_run = True
+
+    def sw_lap(self, now):
+        if self.sw_run and len(self.sw_laps) < 99:
+            self.sw_laps.append(self.sw_elapsed(now))
+            return True
+        return False
+
+    def sw_reset(self):
+        self.sw_run = False
+        self.sw_acc = 0
+        self.sw_laps = []
+
+    # ---- 手機訊息 ----
+    def apply(self, m, now):
+        k = m.get("k")
+        if k == "time":
+            self.sync_time(m.get("t", 0), m.get("z", 0), now)
+        elif k == "batt":
+            self.batt = m.get("p", -1)
+            self.charging = bool(m.get("ch", 0))
+        elif k == "track":
+            self.title = m.get("t", "")
+            self.artist = m.get("a", "")
+            self.album = m.get("b", "")
+            self.app = m.get("app", "")
+            self.dur = m.get("d", 0)
+            self.has_track = bool(self.title)
+            if not self.has_track:
+                self.pl = PL_NONE
+        elif k == "play":
+            self.pl = m.get("s", 0)
+            self.speed = m.get("v", 100) / 100.0
+            self.set_pos(m.get("p", 0), now)
+        elif k == "vol":
+            self.vol = m.get("v", 0)
+            self.vol_max = max(1, m.get("m", 15))
+            self.muted = bool(m.get("mu", 0))
+        elif k == "route":
+            r = m.get("r", "")
+            self.route = {"spk": RT_SPK, "bt": RT_BT, "wired": RT_WIRED}.get(r, RT_NONE)
+            self.route_name = m.get("n", "")
+        elif k == "mode":
+            self.shuffle = m.get("sh", 0)
+            self.repeat = m.get("rp", 0)
