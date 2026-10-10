@@ -221,8 +221,35 @@ class BridgeService : Service() {
         AppLog.i(TAG, "服務啟動")
         features = Features.registry.map { it.make(host) }
         eachFeature { it.start() }
+        acquireWake()
         connect()
         h.postDelayed(ticker, 1000)
+    }
+
+    private var wake: android.os.PowerManager.WakeLock? = null
+
+    /** 部分喚醒鎖: 螢幕關閉時 CPU 仍會跑, 計時器與藍牙才不會被凍結 (較耗電, 可在設定關閉) */
+    private fun acquireWake() {
+        releaseWake()
+        if (!Prefs.wakeLock(this)) return
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            val w = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "deskctl:bridge")
+            w.setReferenceCounted(false)
+            w.acquire()
+            wake = w
+            AppLog.i(TAG, "已持有喚醒鎖")
+        } catch (e: Exception) {
+            AppLog.w(TAG, "喚醒鎖失敗: " + e)
+        }
+    }
+
+    private fun releaseWake() {
+        try {
+            wake?.let { if (it.isHeld) it.release() }
+        } catch (_: Exception) {
+        }
+        wake = null
     }
 
     private fun shutdown() {
@@ -230,6 +257,7 @@ class BridgeService : Service() {
         inited = false
         h.removeCallbacksAndMessages(null)
         eachFeature { it.stop() }
+        releaseWake()
         features = emptyList()
         infoLines = emptyList()
         stopScan()

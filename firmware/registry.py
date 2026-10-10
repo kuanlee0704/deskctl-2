@@ -7,6 +7,7 @@ PAGES = (
     ("music", "音樂", "p_music", "MusicPage", "main"),
     ("games", "遊戲", "p_games", "GamesPage", "main"),
     ("act", "捷徑", "p_shortcuts", "ShortcutsPage", "main"),
+    ("sys", "手機狀態", "p_sys", "SysPage", "main"),
     ("manual", "說明書", "p_manual", "ManualPage", "main"),
     ("settings", "快捷設定", "p_settings", "SettingsPage", "main"),
     # --- 遊戲 ---
@@ -19,6 +20,20 @@ PAGES = (
 
 MAIN = tuple(p for p in PAGES if p[4] == "main")
 GAMES = tuple(p for p in PAGES if p[4] == "game")
+
+
+def main_items(order):
+    """目錄項目: order 是手機設定的順序 (None = 預設順序); 不存在的 id 會略過"""
+    if not order:
+        return MAIN
+    out = []
+    seen = []
+    for pid in order:
+        p = info(pid)
+        if p and p[4] == "main" and pid not in seen:
+            out.append(p)
+            seen.append(pid)
+    return tuple(out) or MAIN
 
 
 def info(pid):

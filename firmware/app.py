@@ -64,6 +64,7 @@ class MenuPage(Page):
         self.src = "home"
 
     def open(self, src, now):
+        self.items = registry.main_items(self.st.cfg.get("menu"))
         self.src = src
         self.sel = 0
         for i, p in enumerate(self.items):
@@ -91,9 +92,10 @@ class MenuPage(Page):
             else:
                 ring.append(pid)
                 self.app.toast("已加入快捷切換 ★")
-            order = [p[0] for p in registry.MAIN]
+            order = [p[0] for p in self.items]
             ring.sort(key=lambda x: order.index(x) if x in order else 99)
             self.app.st.cfg.set("ring", ring)
+            self.app.send_layout()
         else:
             return True if ev in (EV_PRESS, EV_RELEASE, EV_DOUBLE, EV_TRIPLE) else False
         self.dirty = True
@@ -155,6 +157,9 @@ class App:
         self._gc_t = now
         self._gc_n = 0
         self.pm = Power(self)
+        self.t_boot = now
+        self._hello_conn = -1
+        self._stat_t = now
         gc.collect()
         self.go("home", now=now)
 
@@ -212,6 +217,23 @@ class App:
         else:
             i = 0
         self.go(ring[i])
+
+    # ---------- 回報給手機 ----------
+    def send_layout(self):
+        cfg = self.st.cfg
+        items = registry.main_items(cfg.get("menu"))
+        self.link.send({"c": "layout", "m": [p[0] for p in items], "r": list(cfg.get("ring"))})
+
+    def send_stat(self, now):
+        self.link.send({"c": "stat", "ver": VERSION, "up": time.ticks_diff(now, self.t_boot) // 1000,
+                        "mf": gc.mem_free(), "ma": gc.mem_alloc(), "pg": self.cur_id,
+                        "cn": self.link.n_conn, "dc": self.link.n_disc, "lu": self.link.last_up})
+
+    def hello(self, now):
+        """手機剛連上: 告訴它有哪些頁面、目前目錄順序與運作狀態 (手機端用來顯示與排序)"""
+        self.link.send({"c": "pages", "l": [[p[0], p[1]] for p in registry.MAIN]})
+        self.send_layout()
+        self.send_stat(now)
 
     def act_toast(self, ev):
         s, n, m = ev
@@ -302,6 +324,14 @@ class App:
                 self.link.send({"c": "pong"})
         self.link.pump()
         self.pm.update(now)
+        on = self.link.online(now) and self.link.connected
+        if on and self._hello_conn != self.link.n_conn:
+            self._hello_conn = self.link.n_conn          # 每次(重新)連線都打一次招呼
+            self.hello(now)
+            self._stat_t = now
+        elif on and time.ticks_diff(now, self._stat_t) > 10000:
+            self._stat_t = now
+            self.send_stat(now)
         self.render(now)
         if time.ticks_diff(now, self._gc_t) > 3000:       # 定期整理記憶體, 避免碎片累積
             self._gc_t = now

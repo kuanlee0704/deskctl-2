@@ -114,6 +114,7 @@ class MainActivity : Activity() {
         shortcutsPage = ShortcutsPage(this)
         pages.add(buildHome())
         pages.add(shortcutsPage.view)
+        pages.add(buildStatus())
         pages.add(buildLog())
         pages.add(buildSettings())
         for (p in pages) content.addView(p, FrameLayout.LayoutParams(-1, -1))
@@ -122,7 +123,7 @@ class MainActivity : Activity() {
         bar.orientation = LinearLayout.HORIZONTAL
         bar.setBackgroundColor(C_CARD)
         bar.elevation = dp(8).toFloat()
-        val names = arrayOf("主頁", "捷徑", "記錄", "設定")
+        val names = arrayOf("主頁", "捷徑", "狀態", "記錄", "設定")
         for (i in names.indices) {
             val t = TextView(this)
             t.text = names[i]
@@ -228,7 +229,7 @@ class MainActivity : Activity() {
 
         setupBanner = card(col, 0xFFFFF3E0.toInt())
         tvBanner = text(setupBanner, "", 14f, C_TEXT)
-        button(setupBanner, "前往設定") { select(3) }
+        button(setupBanner, "前往設定") { select(4) }
 
         statusCard = card(col, C_GREY)
         tvState = text(statusCard, "", 26f, Color.WHITE, true)
@@ -439,6 +440,22 @@ class MainActivity : Activity() {
         s2.isChecked = Prefs.autoOpen(this)
         s2.setOnCheckedChangeListener { _, c -> Prefs.setAutoOpen(this, c) }
         pref.addView(s2, LinearLayout.LayoutParams(-1, -2))
+        val s3 = Switch(this)
+        s3.text = "連線時保持 CPU 不休眠 (手機放著也不斷線, 較耗電)"
+        s3.isChecked = Prefs.wakeLock(this)
+        s3.setOnCheckedChangeListener { _, c ->
+            Prefs.setWakeLock(this, c)
+            Toast.makeText(this, "下次啟動服務時生效 (停止後再啟動)", Toast.LENGTH_SHORT).show()
+        }
+        pref.addView(s3, LinearLayout.LayoutParams(-1, -2))
+
+        // ---- 控制器目錄 ----
+        val lay = card(col)
+        text(lay, "控制器目錄順序", 16f, C_TEXT, true)
+        text(lay, "調整控制器選單的順序、隱藏不用的頁面, ★ 表示加入「左右鍵快速切換」。連線後會自動送出。", 12f, C_SUB)
+        layoutBox = LinearLayout(this)
+        layoutBox.orientation = LinearLayout.VERTICAL
+        lay.addView(layoutBox, LinearLayout.LayoutParams(-1, -2))
 
         // ---- 控制器 ----
         val dev = card(col)
@@ -522,6 +539,177 @@ class MainActivity : Activity() {
     }
 
     // ============================================================
+    // 狀態 (手機 + 控制器)
+    private lateinit var tvPhone: TextView
+    private lateinit var tvCtl: TextView
+    private lateinit var tvSpark: TextView
+
+    private fun buildStatus(): View {
+        val (sv, col) = page()
+        text(col, "狀態", 22f, C_TEXT, true).setPadding(0, 0, 0, dp(12))
+        val pc = card(col)
+        text(pc, "手機", 16f, C_TEXT, true)
+        tvPhone = text(pc, "", 14f, C_TEXT)
+        tvPhone.typeface = Typeface.MONOSPACE
+        val cc = card(col)
+        text(cc, "控制器 (開發板)", 16f, C_TEXT, true)
+        tvCtl = text(cc, "", 14f, C_TEXT)
+        tvCtl.typeface = Typeface.MONOSPACE
+        text(cc, "剩餘記憶體趨勢 (約每 10 秒一點)", 12f, C_SUB).setPadding(0, dp(8), 0, 0)
+        tvSpark = text(cc, "", 18f, C_PRIMARY)
+        text(cc, "記憶體持續下降不回升, 代表可能有洩漏; 韌體會自動回收。", 12f, C_GREY)
+        return sv
+    }
+
+    private fun updateStatus() {
+        val o = PhoneStats.collect(this)
+        val sb = StringBuilder()
+        try {
+            val b = registerReceiver(null, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            if (b != null) {
+                val lv = b.getIntExtra("level", -1) * 100 / b.getIntExtra("scale", 100).coerceAtLeast(1)
+                sb.append(String.format("%-14s%s\n", "電量", "$lv%"))
+            }
+        } catch (_: Exception) {
+        }
+        for ((k, v) in PhoneStats.lines(o)) sb.append(String.format("%-12s%s\n", k, v))
+        sb.append(String.format("%-12s%s", "背景服務", if (BridgeService.running) "執行中" else "未啟動"))
+        tvPhone.text = sb.toString()
+
+        if (DeviceInfo.at == 0L) {
+            tvCtl.text = if (BridgeService.connected) "已連線, 等待控制器回報…" else "未連線"
+            tvSpark.text = ""
+            return
+        }
+        val age = (SystemClock.elapsedRealtime() - DeviceInfo.at) / 1000
+        val up = DeviceInfo.upSec + age
+        val tot = (DeviceInfo.memFree + DeviceInfo.memAlloc).coerceAtLeast(1)
+        val c = StringBuilder()
+        c.append(String.format("%-12s%s\n", "韌體版本", "v" + DeviceInfo.ver))
+        c.append(String.format("%-12s%s\n", "已運作", fmtDur(up)))
+        c.append(String.format("%-12s%s\n", "目前頁面", pageName(DeviceInfo.page)))
+        c.append(String.format("%-12s%d KB (%d%%)\n", "剩餘記憶體", DeviceInfo.memFree / 1024, DeviceInfo.memFree * 100L / tot))
+        c.append(String.format("%-12s%d KB\n", "已用記憶體", DeviceInfo.memAlloc / 1024))
+        c.append(String.format("%-12s%d 次\n", "藍牙連線", DeviceInfo.conn))
+        c.append(String.format("%-12s%d 次\n", "藍牙斷線", DeviceInfo.disc))
+        c.append(String.format("%-12s%s", "回報", if (age < 30) "${age} 秒前" else "已過期 (${age} 秒)"))
+        tvCtl.text = c.toString()
+        tvSpark.text = spark(DeviceInfo.memHistory.toList())
+    }
+
+    private fun pageName(id: String): String = DeviceInfo.pages.firstOrNull { it.first == id }?.second ?: id
+
+    private fun fmtDur(sec: Long): String = when {
+        sec >= 3600 -> "${sec / 3600} 小時 ${sec % 3600 / 60} 分"
+        sec >= 60 -> "${sec / 60} 分 ${sec % 60} 秒"
+        else -> "$sec 秒"
+    }
+
+    private fun spark(v: List<Int>): String {
+        if (v.size < 2) return ""
+        val lo = v.min()
+        val hi = v.max()
+        val bars = "▁▂▃▄▅▆▇█"
+        val sb = StringBuilder()
+        for (x in v) sb.append(if (hi == lo) bars[3] else bars[(x - lo) * 7 / (hi - lo)])
+        return sb.toString()
+    }
+
+    // ============================================================
+    // 控制器目錄編輯
+    private lateinit var layoutBox: LinearLayout
+    private var edMenu = ArrayList<String>()
+    private var edRing = ArrayList<String>()
+    private var edInit = false
+    private var edPagesN = -1
+
+    private fun updateLayoutEditor() {
+        val pgs = DeviceInfo.pages
+        if (!edInit && pgs.isNotEmpty()) {
+            val saved = LayoutStore.load(this)
+            val m = saved?.menu?.takeIf { it.isNotEmpty() } ?: DeviceInfo.menu.ifEmpty { pgs.map { it.first } }
+            edMenu = ArrayList(m.filter { id -> pgs.any { it.first == id } })
+            if (!edMenu.contains("home")) edMenu.add(0, "home")
+            if (!edMenu.contains("settings")) edMenu.add("settings")
+            edRing = ArrayList((saved?.ring?.takeIf { it.isNotEmpty() } ?: DeviceInfo.ring.ifEmpty { listOf("home", "sw", "music") }))
+            edInit = true
+            edPagesN = -1
+        }
+        if (edPagesN != pgs.size + (if (edInit) 1000 else 0)) {
+            edPagesN = pgs.size + (if (edInit) 1000 else 0)
+            renderLayout()
+        }
+    }
+
+    private fun renderLayout() {
+        layoutBox.removeAllViews()
+        val pgs = DeviceInfo.pages
+        if (pgs.isEmpty() || !edInit) {
+            text(layoutBox, "連線到控制器後才能編輯 (需要先取得頁面清單)", 13f, C_GREY)
+            return
+        }
+        fun title(id: String) = pgs.firstOrNull { it.first == id }?.second ?: id
+        fun small(row: LinearLayout, t: String, enabled: Boolean = true, f: () -> Unit) {
+            val b = Button(this)
+            b.text = t
+            b.isAllCaps = false
+            b.isEnabled = enabled
+            b.minWidth = 0
+            b.minimumWidth = 0
+            b.setOnClickListener { f() }
+            row.addView(b, LinearLayout.LayoutParams(-2, -2))
+        }
+        for ((i, id) in edMenu.withIndex()) {
+            val row = LinearLayout(this)
+            row.orientation = LinearLayout.HORIZONTAL
+            row.gravity = Gravity.CENTER_VERTICAL
+            val t = TextView(this)
+            t.text = title(id) + if (id == "home") " (固定第一)" else ""
+            t.textSize = 15f
+            t.setTextColor(C_TEXT)
+            row.addView(t, LinearLayout.LayoutParams(0, -2, 1f))
+            val locked = id == "home"
+            small(row, "↑", i > 1) { edMenu.removeAt(i); edMenu.add(i - 1, id); renderLayout() }
+            small(row, "↓", !locked && i < edMenu.size - 1) { edMenu.removeAt(i); edMenu.add(i + 1, id); renderLayout() }
+            small(row, if (edRing.contains(id)) "★" else "☆") {
+                if (edRing.contains(id)) { if (edRing.size > 1) edRing.remove(id) } else edRing.add(id)
+                renderLayout()
+            }
+            small(row, "隱藏", id != "home" && id != "settings") { edMenu.removeAt(i); edRing.remove(id); renderLayout() }
+            layoutBox.addView(row, LinearLayout.LayoutParams(-1, -2))
+        }
+        val hidden = pgs.filter { !edMenu.contains(it.first) }
+        if (hidden.isNotEmpty()) {
+            text(layoutBox, "已隱藏", 13f, C_SUB).setPadding(0, dp(10), 0, 0)
+            for (p in hidden) {
+                val row = LinearLayout(this)
+                row.orientation = LinearLayout.HORIZONTAL
+                row.gravity = Gravity.CENTER_VERTICAL
+                val t = TextView(this)
+                t.text = p.second
+                t.textSize = 15f
+                t.setTextColor(C_GREY)
+                row.addView(t, LinearLayout.LayoutParams(0, -2, 1f))
+                small(row, "顯示") {
+                    edMenu.add(maxOf(1, edMenu.size - 1), p.first)    // 放在「設定」前面
+                    renderLayout()
+                }
+                layoutBox.addView(row, LinearLayout.LayoutParams(-1, -2))
+            }
+        }
+        button(layoutBox, "儲存並送出到控制器", true) {
+            LayoutStore.save(this, edMenu, edRing)
+            Toast.makeText(this, "已儲存" + if (BridgeService.connected) ", 已送出" else ", 連線後會自動送出", Toast.LENGTH_SHORT).show()
+        }
+        button(layoutBox, "還原為預設順序") {
+            Prefs.setLayout(this, "")
+            edInit = false
+            Toast.makeText(this, "已還原手機端設定 (控制器維持目前順序)", Toast.LENGTH_SHORT).show()
+            edPagesN = -2
+        }
+    }
+
+    // ============================================================
     // 權限與服務
     private fun startSvc(action: String) {
         if (action == BridgeService.ACTION_START) {
@@ -585,7 +773,9 @@ class MainActivity : Activity() {
         updateHome()
         updateSettings()
         if (tab == 1) shortcutsPage.refresh()
-        if (tab == 2) updateLog()
+        if (tab == 2) updateStatus()
+        if (tab == 3) updateLog()
+        if (tab == 4) updateLayoutEditor()
         h.removeCallbacksAndMessages(null)
         h.postDelayed({ refresh() }, 1000)
     }

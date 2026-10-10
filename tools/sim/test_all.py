@@ -80,7 +80,7 @@ r.link.sent.clear(); r.double(K_CENTER); check("center double -> mute (not menu)
 r.link.sent.clear(); r.hold(K_RIGHT, 2000)
 seeks = [m for m in r.link.sent if m.get("c") == "seek"]
 check("hold right -> continuous seeks", len(seeks) >= 5, len(seeks))
-check("hold right sends no next/pp", all(m.get("c") == "seek" for m in r.link.sent), r.link.sent)
+check("hold right sends no next/pp", all(m.get("c") in ("seek","stat") for m in r.link.sent), r.link.sent)
 # 目錄
 r.hold(K_CENTER, 800); check("center long -> menu", a.cur_id == "menu")
 r.hold(K_CENTER, 800); check("center long again -> back to music", a.cur_id == "music")

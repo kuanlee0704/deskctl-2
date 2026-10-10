@@ -25,6 +25,20 @@ class DeskAccess : AccessibilityService() {
             return s.doClickText(t)
         }
 
+        fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, ms: Long = 350L): Boolean {
+            val s = instance ?: return false
+            return s.doSwipe(x1, y1, x2, y2, ms)
+        }
+
+        /** 重新整理目前頁面: 先找「重新載入/Reload…」按鈕, 找不到就下拉 */
+        fun refreshPage(): Boolean {
+            val s = instance ?: return false
+            for (t in arrayOf("重新載入", "重新整理", "Reload", "Refresh")) {
+                if (s.doClickText(t)) return true
+            }
+            return s.doSwipe(50f, 30f, 50f, 80f, 450L)
+        }
+
         fun back(): Boolean {
             val s = instance ?: return false
             return s.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
@@ -57,6 +71,17 @@ class DeskAccess : AccessibilityService() {
         p.moveTo(dm.widthPixels * xp / 100f, dm.heightPixels * yp / 100f)
         val g = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(p, 0L, 80L))
+            .build()
+        return dispatchGesture(g, null, null)
+    }
+
+    private fun doSwipe(x1: Float, y1: Float, x2: Float, y2: Float, ms: Long): Boolean {
+        val dm = resources.displayMetrics
+        val p = Path()
+        p.moveTo(dm.widthPixels * x1 / 100f, dm.heightPixels * y1 / 100f)
+        p.lineTo(dm.widthPixels * x2 / 100f, dm.heightPixels * y2 / 100f)
+        val g = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(p, 0L, ms))
             .build()
         return dispatchGesture(g, null, null)
     }

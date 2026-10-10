@@ -123,6 +123,15 @@ class ShortcutFeature(host: FeatureHost) : Feature(host) {
                     return
                 }
                 "media" -> ok = mediaKey(st.a)
+                "refresh" -> {
+                    ok = DeskAccess.refreshPage()
+                    if (!ok) msg = "需要開啟無障礙服務"
+                    delay = 1500L
+                }
+                "wake" -> {
+                    wakeScreen()
+                    delay = 1200L
+                }
                 "back" -> {
                     ok = DeskAccess.back()
                     if (!ok) msg = "需要開啟無障礙服務"
@@ -154,6 +163,16 @@ class ShortcutFeature(host: FeatureHost) : Feature(host) {
             return
         }
         host.handler.postDelayed({ retryClick(sc, idx, text, left - 1) }, 1000L)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun wakeScreen() {
+        val pm = ctx.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        val wl = pm.newWakeLock(
+            android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK or android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP,
+            "deskctl:wake"
+        )
+        wl.acquire(5000L)
     }
 
     private fun mediaKey(kind: String): Boolean {

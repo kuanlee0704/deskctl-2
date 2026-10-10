@@ -272,6 +272,15 @@ for names in (["A"], ["Samsung Music 播放", "Brave YouTube", "第三個很長�
 for ev in (("run", "很長很長很長很長很長很長很長的捷徑名稱", ""), ("fail", "x", "需要開啟無障礙服務"), ("busy", "", "")):
     r.msg(k="act", s=ev[0], n=ev[1], m=ev[2]); r.run(100); snap(r, "act toast " + ev[0])
 
+# ---------- 手機狀態 ----------
+r = mk(); r.app.go("sys", clock.now); snap(r, "sys empty")
+full = dict(pl=2, t=-123, v=4180, th=3, nt=1, wf=4, bt=1, sc=1, ps=1, ds=1, bk=45, br=1, ra=88, rf=12288, ap=1234, ca=9999, sf=1234)
+for sysd in (full, dict(nt=0, bk=10), dict(nt=2, bt=0, sc=0)):
+    r.msg(k="sys", **sysd); r.run(100)
+    for i in range(4):
+        snap(r, "sys %s sub=%d" % (sorted(sysd)[:2], r.app.cur.sub)); r.click(K_DOWN)
+r.st.batt = 100; r.st.charging = True; r.app.cur.sub = 0; snap(r, "sys batt100")
+
 # ---------- 設定 toast ----------
 r = mk(); r.app.go("sw", clock.now); r.app.toast("先暫停才能重設"); snap(r, "sw toast")
 

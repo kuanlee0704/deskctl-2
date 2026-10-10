@@ -9,7 +9,7 @@ from config import *
 DEFAULTS = {
     "orient": 0, "panel": 0, "bgr": 1, "inv": 1, "calib": 0,
     "h24": 0, "secs": 1, "tsecs": 0, "idle": 0, "bright": 80, "pwr": 1, "dimt": 60, "lowt": 600, "lsleep": 0, "seek": 5, "vstep": 1,
-    "ring": ["home", "sw", "music"], "hi": 0, "chips": 100, "rnd": [0, 999, 5, 1],
+    "ring": ["home", "sw", "music"], "hi": 0, "chips": 100, "menu": None, "rnd": [0, 999, 5, 1],
 }
 
 
@@ -107,12 +107,39 @@ class State:
         self.repeat = 0          # 0 不循環 1 清單循環 2 單曲循環
         # 捷徑 (手機端設定, 名單由手機傳來)
         self.acts = []
+        self.layout_changed = False
+        self.sys = {}            # 手機系統狀態 (電量/網路/記憶體…)
+        self.sys_t = 0
         self.act_ev = None       # (狀態, 名稱, 訊息) 最近一次手機回報, App 會轉成提示
         # 碼表
         self.sw_run = False
         self.sw_t = 0
         self.sw_acc = 0
         self.sw_laps = []
+
+    def set_layout(self, menu, ring):
+        """手機設定的目錄順序 (menu) 與快捷切換 (ring)。home 固定第一個, settings 一定保留。"""
+        import registry
+        ids = [p[0] for p in registry.MAIN]
+        mm = []
+        for x in (menu or []):
+            if x in ids and x not in mm:
+                mm.append(x)
+        if mm:
+            if "home" in mm:
+                mm.remove("home")
+            mm.insert(0, "home")
+            if "settings" not in mm:
+                mm.append("settings")
+            self.cfg.set("menu", mm, False)
+        rr = []
+        for x in (ring or []):
+            if x in ids and x not in rr:
+                rr.append(x)
+        if rr:
+            self.cfg.set("ring", rr, False)
+        self.cfg.save()
+        self.layout_changed = True
 
     # ---- 時間 ----
     def sync_time(self, unix, tz_min, now):
@@ -193,6 +220,11 @@ class State:
             self.route_name = m.get("n", "")
         elif k == "acts":
             self.acts = [str(x) for x in m.get("l", [])][:16]
+        elif k == "sys":
+            self.sys = m
+            self.sys_t = now
+        elif k == "layout":
+            self.set_layout(m.get("m"), m.get("r"))
         elif k == "act":
             self.act_ev = (m.get("s", ""), m.get("n", ""), m.get("m", ""))
         elif k == "mode":

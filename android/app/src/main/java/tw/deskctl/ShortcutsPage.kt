@@ -169,6 +169,7 @@ class ShortcutsPage(private val act: Activity) {
             "開啟 App 並自動播放 (如 Samsung Music)",
             "用瀏覽器開網址 / 指定的 YouTube 影片或播放清單",
             "YouTube 搜尋並播放第一部影片 (需無障礙)",
+            "重新整理目前的網頁 (瀏覽器卡住時用, 需無障礙)",
             "自訂 (自己加步驟)"
         )
         AlertDialog.Builder(act).setTitle("新增捷徑").setItems(items) { _, which ->
@@ -176,6 +177,14 @@ class ShortcutsPage(private val act: Activity) {
                 0 -> tplApp()
                 1 -> tplUrl()
                 2 -> tplYoutube()
+                3 -> {
+                    val sc = Shortcut("重新整理網頁")
+                    sc.steps.add(Step("wake"))
+                    sc.steps.add(Step("refresh"))
+                    list.add(sc)
+                    save()
+                    startEdit(list.size - 1)
+                }
                 else -> {
                     list.add(Shortcut("新捷徑"))
                     startEdit(list.size - 1)
@@ -278,7 +287,8 @@ class ShortcutsPage(private val act: Activity) {
 
     private val stepTypes = arrayOf(
         "開啟 App", "開網址", "等待幾秒", "媒體鍵 (播放/暫停/下一首…)",
-        "點擊畫面位置 (需無障礙)", "點擊含某文字的按鈕 (需無障礙)", "按返回 (需無障礙)"
+        "點擊畫面位置 (需無障礙)", "點擊含某文字的按鈕 (需無障礙)", "按返回 (需無障礙)",
+        "重新整理目前頁面 (需無障礙)", "喚醒螢幕"
     )
 
     private fun addStep(done: (Step) -> Unit) {
@@ -294,7 +304,9 @@ class ShortcutsPage(private val act: Activity) {
         3 -> "media"
         4 -> "tap"
         5 -> "text"
-        else -> "back"
+        6 -> "back"
+        7 -> "refresh"
+        else -> "wake"
     }
 
     private fun editStep(st: Step, done: (Step) -> Unit) {
@@ -314,7 +326,7 @@ class ShortcutsPage(private val act: Activity) {
                 if (st.a.isEmpty()) "50,40" else st.a
             ) { s -> done(Step("tap", s)) }
             "text" -> ask("按鈕上的文字", "例如 播放", st.a) { s -> done(Step("text", s)) }
-            else -> done(Step("back"))
+            else -> done(Step(st.type))
         }
     }
 

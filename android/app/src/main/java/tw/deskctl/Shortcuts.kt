@@ -84,6 +84,8 @@ object Shortcuts {
         "text" -> "點擊文字「" + s.a + "」"
         "media" -> "媒體鍵: " + mediaLabel(s.a)
         "back" -> "按返回"
+        "refresh" -> "重新整理目前頁面"
+        "wake" -> "喚醒螢幕"
         else -> s.type
     }
 }

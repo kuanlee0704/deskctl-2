@@ -1,0 +1,131 @@
+package tw.deskctl
+
+import android.os.SystemClock
+import org.json.JSONObject
+
+/** 控制器回報的狀態 (給「狀態」分頁顯示)。 */
+object DeviceInfo {
+    @Volatile var ver = ""
+    @Volatile var upSec = 0L
+    @Volatile var memFree = 0
+    @Volatile var memAlloc = 0
+    @Volatile var page = ""
+    @Volatile var conn = 0
+    @Volatile var disc = 0
+    @Volatile var lastUp = 0
+    @Volatile var at = 0L                       // 最後一次收到 stat 的 elapsedRealtime
+    @Volatile var pages: List<Pair<String, String>> = emptyList()     // 控制器目錄可用的頁面 (id, 名稱)
+    @Volatile var menu: List<String> = emptyList()                    // 控制器目前的目錄順序
+    @Volatile var ring: List<String> = emptyList()                    // 控制器目前的快速切換環
+    val memHistory = ArrayDeque<Int>()          // 剩餘記憶體歷史 (每次 stat 一點, 最多 30 點)
+    @Volatile var version = 0                   // 有變動就 +1
+
+    fun reset() {
+        at = 0L
+        ver = ""
+    }
+}
+
+/** 目錄設定 (存在手機上, 連線時推給控制器)。 */
+object LayoutStore {
+    class Layout(val menu: List<String>, val ring: List<String>)
+
+    fun load(c: android.content.Context): Layout? {
+        val s = Prefs.layout(c)
+        if (s.isEmpty()) return null
+        return try {
+            val o = JSONObject(s)
+            fun arr(k: String): List<String> {
+                val a = o.optJSONArray(k) ?: return emptyList()
+                return List(a.length()) { a.optString(it) }
+            }
+            Layout(arr("m"), arr("r"))
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun save(c: android.content.Context, menu: List<String>, ring: List<String>) {
+        val o = JSONObject()
+        o.put("m", org.json.JSONArray(menu))
+        o.put("r", org.json.JSONArray(ring))
+        Prefs.setLayout(c, o.toString())
+        version++
+    }
+
+    @Volatile var version = 0
+}
+
+/**
+ * 控制器 ⇄ 手機: 接收控制器的 stat(運作狀態/記憶體)、pages(可用頁面)、layout(目前目錄);
+ * 並把手機上設定的目錄順序 {"k":"layout","m":[...],"r":[...]} 推給控制器。
+ */
+class DeviceFeature(host: FeatureHost) : Feature(host) {
+    override val id = "device"
+    private var lastVer = -1
+
+    override fun onReady() {
+        pushLayout()
+    }
+
+    override fun onTick(n: Int) {
+        if (LayoutStore.version != lastVer) pushLayout()
+    }
+
+    private fun pushLayout() {
+        lastVer = LayoutStore.version
+        val l = LayoutStore.load(host.context) ?: return
+        host.send(
+            JSONObject().put("k", "layout")
+                .put("m", org.json.JSONArray(l.menu))
+                .put("r", org.json.JSONArray(l.ring))
+        )
+        AppLog.i("DEVICE", "已送出目錄設定 (" + l.menu.size + " 項)")
+    }
+
+    override fun onCommand(c: String, o: JSONObject): Boolean {
+        when (c) {
+            "stat" -> {
+                DeviceInfo.ver = o.optString("ver")
+                DeviceInfo.upSec = o.optLong("up")
+                DeviceInfo.memFree = o.optInt("mf")
+                DeviceInfo.memAlloc = o.optInt("ma")
+                DeviceInfo.page = o.optString("pg")
+                DeviceInfo.conn = o.optInt("cn")
+                DeviceInfo.disc = o.optInt("dc")
+                DeviceInfo.lastUp = o.optInt("lu")
+                DeviceInfo.at = SystemClock.elapsedRealtime()
+                val h = DeviceInfo.memHistory
+                h.addLast(DeviceInfo.memFree)
+                while (h.size > 30) h.removeFirst()
+                DeviceInfo.version++
+            }
+            "pages" -> {
+                val a = o.optJSONArray("l") ?: return true
+                DeviceInfo.pages = List(a.length()) {
+                    val p = a.optJSONArray(it)
+                    (p?.optString(0) ?: "") to (p?.optString(1) ?: "")
+                }
+                DeviceInfo.version++
+            }
+            "layout" -> {
+                fun arr(k: String): List<String> {
+                    val a = o.optJSONArray(k) ?: return emptyList()
+                    return List(a.length()) { a.optString(it) }
+                }
+                DeviceInfo.menu = arr("m")
+                DeviceInfo.ring = arr("r")
+                DeviceInfo.version++
+            }
+            else -> return false
+        }
+        return true
+    }
+
+    override fun stop() {
+        DeviceInfo.reset()
+    }
+
+    override fun info(): String =
+        if (DeviceInfo.at == 0L) "" else "控制器 v" + DeviceInfo.ver + " · 剩餘記憶體 " + DeviceInfo.memFree / 1024 + " KB"
+}
