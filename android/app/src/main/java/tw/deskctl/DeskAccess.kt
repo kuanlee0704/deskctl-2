@@ -59,6 +59,16 @@ class DeskAccess : AccessibilityService() {
             return s.doClickFirstVideo()
         }
 
+        fun recents(): Boolean {
+            val s = instance ?: return false
+            return s.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)
+        }
+
+        fun home(): Boolean {
+            val s = instance ?: return false
+            return s.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
+        }
+
         fun back(): Boolean {
             val s = instance ?: return false
             return s.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)

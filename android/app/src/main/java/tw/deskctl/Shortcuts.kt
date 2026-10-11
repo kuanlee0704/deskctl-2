@@ -87,6 +87,8 @@ object Shortcuts {
         "refresh" -> "重新整理目前頁面"
         "wake" -> "喚醒螢幕"
         "firstvideo" -> "點第一部影片"
+        "killbg" -> "結束背景 App + 清本 App 快取"
+        "clearrecents" -> "清除最近使用的 App"
         "ensureplay" -> "確保播放中 (補點擊/解除靜音, 播放器位置 " + s.a.ifEmpty { "50,23" } + " %)"
         else -> s.type
     }

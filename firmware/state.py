@@ -9,7 +9,7 @@ from config import *
 DEFAULTS = {
     "orient": 0, "panel": 0, "bgr": 1, "inv": 1, "calib": 0,
     "h24": 0, "secs": 1, "tsecs": 0, "idle": 0, "bright": 80, "pwr": 1, "dimt": 60, "lowt": 600, "lsleep": 0, "seek": 5, "vstep": 1,
-    "ring": ["home", "sw", "music"], "hi": 0, "chips": 100, "menu": None, "rnd": [0, 999, 5, 1],
+    "ring": ["home", "sw", "music"], "hi": 0, "chips": 100, "menu": None, "rnd": [0, 999, 5, 1], "msgw": 1, "msgt": 1,
 }
 
 
@@ -110,12 +110,21 @@ class State:
         self.layout_changed = False
         self.sys = {}            # 手機系統狀態 (電量/網路/記憶體…)
         self.sys_t = 0
+        self.msgs = []           # 手機通知: [編號, App, 標題, 內容, 收到時間ms, 未讀]
+        self.msg_ev = None       # 新訊息 (App, 標題) , App 會轉成提示並喚醒螢幕
         self.act_ev = None       # (狀態, 名稱, 訊息) 最近一次手機回報, App 會轉成提示
         # 碼表
         self.sw_run = False
         self.sw_t = 0
         self.sw_acc = 0
         self.sw_laps = []
+
+    def unread(self):
+        n = 0
+        for x in self.msgs:
+            if x[5]:
+                n += 1
+        return n
 
     def set_layout(self, menu, ring):
         """手機設定的目錄順序 (menu) 與快捷切換 (ring)。home 固定第一個, settings 一定保留。"""
@@ -225,6 +234,15 @@ class State:
             self.sys_t = now
         elif k == "layout":
             self.set_layout(m.get("m"), m.get("r"))
+        elif k == "msg":
+            i = m.get("i", 0)
+            self.msgs = [x for x in self.msgs if x[0] != i]
+            self.msgs.insert(0, [i, str(m.get("a", ""))[:16], str(m.get("t", ""))[:40], str(m.get("x", ""))[:120], now, True])
+            del self.msgs[12:]
+            self.msg_ev = (self.msgs[0][1], self.msgs[0][2])
+        elif k == "msgrm":            # 手機上已讀/清除 -> 這裡也移除
+            i = m.get("i", 0)
+            self.msgs = [x for x in self.msgs if x[0] != i]
         elif k == "act":
             self.act_ev = (m.get("s", ""), m.get("n", ""), m.get("m", ""))
         elif k == "mode":

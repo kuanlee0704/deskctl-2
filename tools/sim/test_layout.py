@@ -281,6 +281,25 @@ for sysd in (full, dict(nt=0, bk=10), dict(nt=2, bt=0, sc=0), dict(pl=0, t=452, 
         snap(r, "sys %s sub=%d" % (sorted(sysd)[:2], r.app.cur.sub)); r.click(K_DOWN)
 r.st.batt = 100; r.st.charging = True; r.app.cur.sub = 0; snap(r, "sys batt100")
 
+# ---------- 手機訊息 ----------
+r = mk(); r.app.go("msg", clock.now); snap(r, "msg empty")
+longt = "這是一則很長很長的訊息內容, 用來測試自動換行與捲動功能是否正常, 還有 English words mixed 123456789 超過三行的情況"
+for n in (1, 3, 5, 12):
+    r = mk()
+    for i in range(n):
+        r.msg(k="msg", i=i + 1, a=["LINE", "簡訊", "Gmail", "Instagram 很長的名字的App"][i % 4], t=["王小明", "", "週報(很長很長很長很長很長的標題)", "x"][i % 4], x=longt if i % 2 else "好")
+    r.run(100); snap(r, "msg toast n=%d" % n)
+    r.app.go("msg", clock.now)
+    for j in range(min(n, 6)):
+        snap(r, "msg list n=%d sel=%d" % (n, j)); r.click(K_DOWN)
+    r.click(K_CENTER)
+    for j in range(8):
+        snap(r, "msg detail n=%d s=%d" % (n, j)); r.click(K_DOWN)
+    r.click(K_CENTER)
+r = mk(); r.msg(k="msg", i=1, a="LINE", t="a", x="b"); r.run(100)
+for h24, secs, tsecs in itertools.product((0, 1), (0, 1), (0, 1)):
+    r.st.cfg.set("h24", h24); r.st.cfg.set("tsecs", tsecs); r.app.go("home", clock.now); snap(r, "topbar mail %d%d%d" % (h24, secs, tsecs))
+
 # ---------- 設定 toast ----------
 r = mk(); r.app.go("sw", clock.now); r.app.toast("先暫停才能重設"); snap(r, "sw toast")
 

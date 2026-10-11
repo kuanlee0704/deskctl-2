@@ -45,6 +45,7 @@ IC = {
     "bat": Icon(["#######..", "#.....##.", "#.....##.", "#######.."]),
     "up": Icon(["...#...", "..###..", ".#####.", "#######"]),
     "down": Icon(["#######", ".#####.", "..###..", "...#..."]),
+    "mail": Icon(["#######", "##...##", "#.#.#.#", "#..#..#", "#######"]),
     "bolt": Icon(["..##", ".##.", "####", ".##.", "##.."]),
 }
 
@@ -78,6 +79,10 @@ def draw_topbar(c, title, st, link, now, h24=True, secs=False):
     x -= 7
     c.icon(IC["bt"], x, 1, col)
     x -= 3
+    if st.msgs and st.cfg.get("msgt") and st.unread():       # 有未讀手機訊息
+        x -= 7
+        c.icon(IC["mail"], x, 3, PINK)
+        x -= 3
     if online and st.has_track and st.pl == 1:      # 手機正在播放音訊
         x -= 8
         c.icon(IC["play"], x, 2, ACC)

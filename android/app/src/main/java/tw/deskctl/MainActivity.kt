@@ -449,6 +449,24 @@ class MainActivity : Activity() {
         }
         pref.addView(s3, LinearLayout.LayoutParams(-1, -2))
 
+        // ---- 手機訊息 ----
+        val msgc = card(col)
+        text(msgc, "手機訊息 (轉發通知到控制器)", 16f, C_TEXT, true)
+        text(msgc, "需要先開啟「通知存取」。LINE、簡訊等新通知會顯示在控制器的「手機訊息」頁並跳提示。", 12f, C_SUB)
+        val m1 = Switch(this)
+        m1.text = "轉發手機通知"
+        m1.isChecked = Prefs.msgOn(this)
+        m1.setOnCheckedChangeListener { _, c -> Prefs.setMsgOn(this, c) }
+        msgc.addView(m1, LinearLayout.LayoutParams(-1, -2))
+        val m2 = Switch(this)
+        m2.text = "隱藏內容 (只顯示 App 名稱, 保護隱私)"
+        m2.isChecked = Prefs.msgHide(this)
+        m2.setOnCheckedChangeListener { _, c -> Prefs.setMsgHide(this, c) }
+        msgc.addView(m2, LinearLayout.LayoutParams(-1, -2))
+        button(msgc, "選擇不轉發的 App") {
+            pickApps("不轉發這些 App 的通知", Prefs.msgBlock(this)) { Prefs.setMsgBlock(this, it) }
+        }
+
         // ---- 控制器目錄 ----
         val lay = card(col)
         text(lay, "控制器目錄順序", 16f, C_TEXT, true)
@@ -543,6 +561,25 @@ class MainActivity : Activity() {
     private lateinit var tvPhone: TextView
     private lateinit var tvCtl: TextView
     private lateinit var tvSpark: TextView
+    private lateinit var tvClean: TextView
+
+    /** 列出可開啟的 App 讓使用者勾選 (多選) */
+    private fun pickApps(title: String, current: Set<String>, save: (Set<String>) -> Unit) {
+        val apps = Cleaner.launcherApps(this)
+        val names = apps.map { it.first }.toTypedArray()
+        val checked = BooleanArray(apps.size) { apps[it].second in current }
+        android.app.AlertDialog.Builder(this).setTitle(title)
+            .setMultiChoiceItems(names, checked) { _, i, c -> checked[i] = c }
+            .setPositiveButton("儲存") { _, _ ->
+                val s = HashSet<String>()
+                for (i in apps.indices) if (checked[i]) s.add(apps[i].second)
+                for (p in current) if (apps.none { it.second == p }) s.add(p)
+                save(s)
+                Toast.makeText(this, "已儲存 (${s.size} 個)", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
 
     private fun buildStatus(): View {
         val (sv, col) = page()
@@ -558,6 +595,32 @@ class MainActivity : Activity() {
         text(cc, "剩餘記憶體趨勢 (約每 10 秒一點)", 12f, C_SUB).setPadding(0, dp(8), 0, 0)
         tvSpark = text(cc, "", 18f, C_PRIMARY)
         text(cc, "記憶體持續下降不回升, 代表可能有洩漏; 韌體會自動回收。", 12f, C_GREY)
+
+        val cl = card(col)
+        text(cl, "手機清理", 16f, C_TEXT, true)
+        text(
+            cl,
+            "已自動保護: 本 App、有媒體工作階段的 App (音樂 / Brave 影片)、輸入法、桌面與你指定的 App。" +
+                "別的 App 的快取 Android 不允許第三方清除, 這裡只能結束背景 App (釋放記憶體) 與清除本 App 快取。",
+            12f, C_SUB
+        )
+        tvClean = text(cl, "", 13f, C_PRIMARY)
+        button(cl, "結束背景 App + 清快取", true) {
+            tvClean.text = "清理中…"
+            Cleaner.cleanMemory(this, h) { r ->
+                tvClean.text = "已嘗試結束 ${r.tried} 個 App, 清快取 ${r.cacheKb}KB, 釋放約 ${r.freedMb}MB"
+            }
+        }
+        button(cl, "清除最近使用的 App (需無障礙服務)") {
+            tvClean.text = "開啟最近工作…"
+            Cleaner.clearRecents(h) { ok, why ->
+                // 清完會回到桌面; 結果在記錄與下次開啟時可見
+                AppLog.i("CLEAN", if (ok) "已清除最近使用清單" else "清除最近使用失敗: $why")
+            }
+        }
+        button(cl, "選擇清理時要保護的 App") {
+            pickApps("清理時不要結束這些 App", Prefs.cleanProtect(this)) { Prefs.setCleanProtect(this, it) }
+        }
         return sv
     }
 

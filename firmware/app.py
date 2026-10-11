@@ -240,7 +240,7 @@ class App:
         if s == "run":
             t = "執行 " + n
         elif s == "done":
-            t = "完成 " + n
+            t = "完成 " + n + ((" " + m) if m else "")
         elif s == "busy":
             t = "上一個還沒跑完"
         else:
@@ -317,6 +317,13 @@ class App:
             if ev is not None:
                 self.st.act_ev = None
                 self.act_toast(ev)
+            mev = self.st.msg_ev
+            if mev is not None:
+                self.st.msg_ev = None
+                if self.cur_id != "msg":
+                    self.toast(ui.clip_text(self.c, mev[0] + ": " + (mev[1] or "新訊息"), 138), 2500)
+                if self.st.cfg.get("msgw"):
+                    self.idle_t = now              # 新訊息 -> 喚醒螢幕
             if self.st.pl == PL_PLAY and was != PL_PLAY:
                 self.idle_t = now                  # 手機開始播放 -> 喚醒
             self.cur.dirty = True

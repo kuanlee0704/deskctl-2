@@ -48,6 +48,15 @@ class SysPage(Page):
         if k in (K_UP, K_DOWN) and ev in (EV_CLICK, EV_HOLD, EV_LONG):
             self.sub = (self.sub + (1 if k == K_DOWN else -1)) % N
             return True
+        if k == K_CENTER and ev in (EV_CLICK, EV_DOUBLE):
+            app = self.app
+            if not app.link.online(now):
+                app.toast("手機未連線")
+            else:
+                two = ev == EV_DOUBLE
+                app.link.send({"c": "clean2" if two else "clean"})
+                app.toast("已要求清理+最近" if two else "已要求清理背景", 1200)
+            return True
         if k in (K_UP, K_DOWN, K_CENTER):
             return ev in (EV_PRESS, EV_RELEASE, EV_CLICK, EV_DOUBLE, EV_TRIPLE)
         return False

@@ -222,4 +222,30 @@ r.link.is_online = True
 r.hold(K_UP, 5300); check("5s dir hold -> sync", {"c": "sync"} in r.link.sent, r.link.sent)
 r = Rig(); r.run(100); r.app.go("act"); r.run(100)
 r.link.sent.clear(); r.click(K_CENTER); check("empty list: no send", not r.link.sent)
+# ---------- 手機訊息 ----------
+r = Rig({"idle": 30}); r.msg(k="time", t=1791449340, z=480); r.run(100); a = r.app
+r.msg(k="msg", i=1, a="LINE", t="小明", x="吃飯了嗎"); r.run(100)
+check("msg stored", len(r.st.msgs) == 1 and r.st.unread() == 1, r.st.msgs)
+check("msg toast shown", a._toast and "LINE" in a._toast, a._toast)
+r.msg(k="msg", i=1, a="LINE", t="小明", x="更新"); r.run(50)
+check("same id replaces", len(r.st.msgs) == 1 and r.st.msgs[0][3] == "更新")
+r.msg(k="msg", i=2, a="簡訊", t="x", x="y"); r.run(50)
+check("newest first", [m[0] for m in r.st.msgs] == [2, 1])
+r.msg(k="msgrm", i=2); r.run(50)
+check("msgrm removes", [m[0] for m in r.st.msgs] == [1])
+for i in range(20):
+    r.msg(k="msg", i=100 + i, a="A", t="t", x="x")
+r.run(50); check("capped at 12", len(r.st.msgs) == 12)
+a.go("msg"); r.run(100); check("opening page marks read", r.st.unread() == 0)
+r.click(K_CENTER); check("center opens detail", a.cur.detail)
+r.click(K_CENTER); check("center closes detail", not a.cur.detail)
+r.hold(K_UP, 5300); check("5s hold clears all", len(r.st.msgs) == 0, len(r.st.msgs))
+
+# ---------- 手機清理 ----------
+r = Rig(); r.run(100); r.app.go("sys"); r.run(100); r.link.is_online = False
+r.link.sent.clear(); r.click(K_CENTER); check("sys center offline: no clean", not any(str(m.get("c","")).startswith("clean") for m in r.link.sent), r.link.sent)
+r.link.is_online = True; r.link.sent.clear(); r.click(K_CENTER); check("sys center -> clean", {"c": "clean"} in r.link.sent, r.link.sent)
+r.link.sent.clear(); r.double(K_CENTER); check("sys center double -> clean2", {"c": "clean2"} in r.link.sent, r.link.sent)
+r.msg(k="act", s="done", n="清理", m="釋放約 300MB"); r.run(100); check("clean result toast", r.app._toast and "300MB" in r.app._toast, r.app._toast)
+
 print("\n%d failures" % len(fails)); sys.exit(1 if fails else 0)

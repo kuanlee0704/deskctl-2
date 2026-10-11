@@ -35,6 +35,27 @@ object Prefs {
     fun layout(c: Context): String = sp(c).getString("layout", "") ?: ""
     fun setLayout(c: Context, v: String) { sp(c).edit().putString("layout", v).apply() }
 
+    /** 手機訊息: 是否轉發通知 / 是否隱藏內容 / 不轉發的 App / 清理時要保護的 App */
+    fun msgOn(c: Context): Boolean = sp(c).getBoolean("msg_on", true)
+    fun setMsgOn(c: Context, v: Boolean) { sp(c).edit().putBoolean("msg_on", v).apply() }
+    fun msgHide(c: Context): Boolean = sp(c).getBoolean("msg_hide", false)
+    fun setMsgHide(c: Context, v: Boolean) { sp(c).edit().putBoolean("msg_hide", v).apply() }
+    fun msgBlock(c: Context): Set<String> = getSet(c, "msg_block")
+    fun setMsgBlock(c: Context, v: Collection<String>) = putSet(c, "msg_block", v)
+    fun cleanProtect(c: Context): Set<String> = getSet(c, "clean_protect")
+    fun setCleanProtect(c: Context, v: Collection<String>) = putSet(c, "clean_protect", v)
+
+    private fun getSet(c: Context, k: String): Set<String> = try {
+        val a = org.json.JSONArray(sp(c).getString(k, "[]"))
+        HashSet<String>().also { s -> for (i in 0 until a.length()) s.add(a.optString(i)) }
+    } catch (_: Exception) {
+        emptySet()
+    }
+
+    private fun putSet(c: Context, k: String, v: Collection<String>) {
+        sp(c).edit().putString(k, org.json.JSONArray(v.toList()).toString()).apply()
+    }
+
     /** 捷徑清單 (JSON 字串, 格式見 Shortcuts.kt) */
     fun shortcuts(c: Context): String = sp(c).getString("shortcuts", "[]") ?: "[]"
     fun setShortcuts(c: Context, v: String) { sp(c).edit().putString("shortcuts", v).apply() }

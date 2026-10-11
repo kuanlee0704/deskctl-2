@@ -131,6 +131,19 @@ class ShortcutFeature(host: FeatureHost) : Feature(host) {
                     }
                     return
                 }
+                "killbg" -> {
+                    Cleaner.cleanMemory(ctx, host.handler) { r ->
+                        AppLog.i("SHORTCUT", "清理背景 App: 嘗試 ${r.tried} 個, 釋放約 ${r.freedMb}MB")
+                        step(sc, idx + 1)
+                    }
+                    return
+                }
+                "clearrecents" -> {
+                    Cleaner.clearRecents(host.handler) { ok, why ->
+                        if (ok) step(sc, idx + 1) else finish(sc, false, why)
+                    }
+                    return
+                }
                 "ensureplay" -> {
                     ensurePlay(sc, idx, 3, st.a.ifEmpty { "50,23" })
                     return

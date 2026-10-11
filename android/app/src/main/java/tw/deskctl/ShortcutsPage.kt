@@ -170,6 +170,7 @@ class ShortcutsPage(private val act: Activity) {
             "用瀏覽器開網址 / 指定的 YouTube 影片或播放清單",
             "YouTube 搜尋並播放第一部影片 (需無障礙)",
             "重新整理目前的網頁 (瀏覽器卡住時用, 需無障礙)",
+            "手機清理 (結束背景 App、清快取、清最近使用)",
             "自訂 (自己加步驟)"
         )
         AlertDialog.Builder(act).setTitle("新增捷徑").setItems(items) { _, which ->
@@ -181,6 +182,15 @@ class ShortcutsPage(private val act: Activity) {
                     val sc = Shortcut("重新整理網頁")
                     sc.steps.add(Step("wake"))
                     sc.steps.add(Step("refresh"))
+                    list.add(sc)
+                    save()
+                    startEdit(list.size - 1)
+                }
+                4 -> {
+                    val sc = Shortcut("手機清理")
+                    sc.steps.add(Step("wake"))
+                    sc.steps.add(Step("killbg"))
+                    sc.steps.add(Step("clearrecents"))
                     list.add(sc)
                     save()
                     startEdit(list.size - 1)
@@ -292,7 +302,9 @@ class ShortcutsPage(private val act: Activity) {
         "點擊畫面位置 (需無障礙)", "點擊含某文字的按鈕 (需無障礙)", "按返回 (需無障礙)",
         "重新整理目前頁面 (需無障礙)", "喚醒螢幕",
         "點第一部影片 (搜尋結果頁, 需無障礙)",
-        "確保播放中 (卡住/被靜音時補點擊, 需無障礙)"
+        "確保播放中 (卡住/被靜音時補點擊, 需無障礙)",
+        "結束背景 App + 清快取 (釋放記憶體)",
+        "清除最近使用的 App (需無障礙)"
     )
 
     private fun addStep(done: (Step) -> Unit) {
@@ -312,7 +324,9 @@ class ShortcutsPage(private val act: Activity) {
         7 -> "refresh"
         8 -> "wake"
         9 -> "firstvideo"
-        else -> "ensureplay"
+        10 -> "ensureplay"
+        11 -> "killbg"
+        else -> "clearrecents"
     }
 
     private fun editStep(st: Step, done: (Step) -> Unit) {
