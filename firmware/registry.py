@@ -5,6 +5,7 @@ PAGES = (
     ("home", "首頁", "p_home", "HomePage", "main"),
     ("sw", "碼表", "p_stopwatch", "StopwatchPage", "main"),
     ("music", "音樂", "p_music", "MusicPage", "main"),
+    ("score", "比分板", "p_score", "ScorePage", "main"),
     ("games", "遊戲", "p_games", "GamesPage", "main"),
     ("dev", "系統總覽", "p_dev", "DevPage", "main"),
     ("msg", "手機訊息", "p_msg", "MsgPage", "main"),

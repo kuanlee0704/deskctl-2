@@ -84,7 +84,7 @@ check("hold right sends no next/pp", all(m.get("c") in ("seek","stat") for m in 
 # 目錄
 r.hold(K_CENTER, 800); check("center long -> menu", a.cur_id == "menu")
 r.hold(K_CENTER, 800); check("center long again -> back to music", a.cur_id == "music")
-r.hold(K_CENTER, 800); r.click(K_DOWN); r.click(K_CENTER)
+r.hold(K_CENTER, 800); r.click(K_DOWN); r.click(K_DOWN); r.click(K_CENTER)
 check("menu select -> games", a.cur_id == "games", a.cur_id)
 r.triple(K_CENTER); check("triple center -> home", a.cur_id == "home", a.cur_id)
 r.triple(K_CENTER); check("triple again toggles back", a.cur_id == "games", a.cur_id)
@@ -266,5 +266,19 @@ r.link.sent.clear(); r.click(K_CENTER); check("sys center offline: no clean", no
 r.link.is_online = True; r.link.sent.clear(); r.click(K_CENTER); check("sys center -> clean", {"c": "clean"} in r.link.sent, r.link.sent)
 r.link.sent.clear(); r.double(K_CENTER); check("sys center double -> clean2", {"c": "clean2"} in r.link.sent, r.link.sent)
 r.msg(k="act", s="done", n="清理", m="釋放約 300MB"); r.run(100); check("clean result toast", r.app._toast and "300MB" in r.app._toast, r.app._toast)
+
+# ---------- 比分板 ----------
+r = Rig(); r.run(100); r.link.sent.clear(); a = r.app; a.go("score"); r.run(100)
+check("score enter sends sc on", {"c": "sc", "on": 1} in r.link.sent, r.link.sent)
+r.msg(k="games", l=[["MLB", "NYY", "BOS"], ["NBA", "LAL", "GSW"], ["CPBL", "樂天", "統一"]]); r.run(50)
+check("games stored", len(r.st.games) == 3 and r.st.games[1][0] == "NBA", r.st.games)
+r.msg(k="score", i=1, lg="NBA", st="L", a="LAL", h="GSW", q=2, c="1:00"); r.run(50)
+check("score stored", r.st.scores.get(1, {}).get("q") == 2)
+check("start slot 0", a.cur.sel == 0)
+r.click(K_RIGHT); check("right -> next game", a.cur.sel == 1 and a.cur_id == "score", (a.cur.sel, a.cur_id))
+r.click(K_LEFT); r.click(K_LEFT); check("left wraps", a.cur.sel == 2)
+r.click(K_DOWN); check("down -> detail view", a.cur.view == 1); r.click(K_UP); check("up -> main view", a.cur.view == 0)
+r.msg(k="games", l=[["MLB", "NYY", "BOS"]]); r.run(50); check("shrunk games drops scores", 1 not in r.st.scores)
+r.link.sent.clear(); a.go("home"); r.run(50); check("leave sends sc off", {"c": "sc", "on": 0} in r.link.sent, r.link.sent)
 
 print("\n%d failures" % len(fails)); sys.exit(1 if fails else 0)

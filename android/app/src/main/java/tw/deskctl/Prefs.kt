@@ -63,6 +63,10 @@ object Prefs {
         sp(c).edit().putString(k, org.json.JSONArray(v.toList()).toString()).apply()
     }
 
+    /** 比分板: 追蹤中的比賽清單 (JSON, 格式見 ScoreApi.kt 的 Tracked) */
+    fun scoreTracked(c: Context): String = sp(c).getString("score_tracked", "[]") ?: "[]"
+    fun setScoreTracked(c: Context, v: String) { sp(c).edit().putString("score_tracked", v).apply() }
+
     /** 捷徑清單 (JSON 字串, 格式見 Shortcuts.kt) */
     fun shortcuts(c: Context): String = sp(c).getString("shortcuts", "[]") ?: "[]"
     fun setShortcuts(c: Context, v: String) { sp(c).edit().putString("shortcuts", v).apply() }

@@ -55,6 +55,7 @@ class MainActivity : Activity() {
     private var pendingStart = false
     private var tab = 0
     private lateinit var shortcutsPage: ShortcutsPage
+    private lateinit var scorePage: ScorePage
 
     // 版面
     private lateinit var content: FrameLayout
@@ -114,6 +115,8 @@ class MainActivity : Activity() {
         shortcutsPage = ShortcutsPage(this)
         pages.add(buildHome())
         pages.add(shortcutsPage.view)
+        scorePage = ScorePage(this)
+        pages.add(scorePage.view)
         pages.add(buildStatus())
         pages.add(buildLog())
         pages.add(buildSettings())
@@ -123,7 +126,7 @@ class MainActivity : Activity() {
         bar.orientation = LinearLayout.HORIZONTAL
         bar.setBackgroundColor(C_CARD)
         bar.elevation = dp(8).toFloat()
-        val names = arrayOf("主頁", "捷徑", "狀態", "記錄", "設定")
+        val names = arrayOf("主頁", "捷徑", "比分", "狀態", "記錄", "設定")
         for (i in names.indices) {
             val t = TextView(this)
             t.text = names[i]
@@ -229,7 +232,7 @@ class MainActivity : Activity() {
 
         setupBanner = card(col, 0xFFFFF3E0.toInt())
         tvBanner = text(setupBanner, "", 14f, C_TEXT)
-        button(setupBanner, "前往設定") { select(4) }
+        button(setupBanner, "前往設定") { select(5) }
 
         statusCard = card(col, C_GREY)
         tvState = text(statusCard, "", 26f, Color.WHITE, true)
@@ -839,9 +842,10 @@ class MainActivity : Activity() {
         updateHome()
         updateSettings()
         if (tab == 1) shortcutsPage.refresh()
-        if (tab == 2) updateStatus()
-        if (tab == 3) updateLog()
-        if (tab == 4) updateLayoutEditor()
+        if (tab == 2) scorePage.refresh()
+        if (tab == 3) updateStatus()
+        if (tab == 4) updateLog()
+        if (tab == 5) updateLayoutEditor()
         h.removeCallbacksAndMessages(null)
         h.postDelayed({ refresh() }, 1000)
     }
