@@ -416,19 +416,8 @@ class ShortcutsPage(private val act: Activity) {
             .show()
     }
 
-    /** 列出手機上可從桌面開啟的 App 讓使用者挑 */
+    /** 列出手機上可從桌面開啟的 App 讓使用者挑 (有搜尋欄) */
     private fun pickApp(title: String, ok: (String) -> Unit) {
-        val i = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val pm = act.packageManager
-        val apps = pm.queryIntentActivities(i, 0)
-            .map { Pair(it.loadLabel(pm).toString(), it.activityInfo.packageName) }
-            .distinctBy { it.second }
-            .sortedBy { it.first.lowercase() }
-        if (apps.isEmpty()) {
-            toast("找不到可開啟的 App")
-            return
-        }
-        val names = apps.map { it.first }.toTypedArray()
-        AlertDialog.Builder(act).setTitle(title).setItems(names) { _, which -> ok(apps[which].second) }.show()
+        AppPicker.single(act, title, ok)
     }
 }

@@ -45,6 +45,29 @@ object LayoutStore {
         }
     }
 
+    /**
+     * 控制器新增了頁面 (例如「手機訊息」) 但手機上已存的自訂目錄沒有它 → 自動補進去 (放在「設定」前面)。
+     * 用「已見過的頁面」判斷, 所以你刻意隱藏的頁面不會被加回來。
+     */
+    fun mergeNewPages(c: android.content.Context, pages: List<Pair<String, String>>) {
+        val known = HashSet(Prefs.layoutKnown(c))
+        val fresh = pages.map { it.first }.filter { it !in known }
+        if (fresh.isEmpty()) return
+        val l = load(c)
+        if (l != null) {
+            val m = ArrayList(l.menu)
+            for (id in fresh) {
+                if (id in m) continue
+                val at = m.indexOf("settings")
+                if (at >= 0) m.add(at, id) else m.add(id)
+            }
+            save(c, m, l.ring)
+            AppLog.i("DEVICE", "目錄補入新頁面: " + fresh.joinToString(","))
+        }
+        known.addAll(fresh)
+        Prefs.setLayoutKnown(c, known)
+    }
+
     fun save(c: android.content.Context, menu: List<String>, ring: List<String>) {
         val o = JSONObject()
         o.put("m", org.json.JSONArray(menu))
@@ -106,6 +129,7 @@ class DeviceFeature(host: FeatureHost) : Feature(host) {
                     val p = a.optJSONArray(it)
                     (p?.optString(0) ?: "") to (p?.optString(1) ?: "")
                 }
+                LayoutStore.mergeNewPages(host.context, DeviceInfo.pages)
                 DeviceInfo.version++
             }
             "layout" -> {

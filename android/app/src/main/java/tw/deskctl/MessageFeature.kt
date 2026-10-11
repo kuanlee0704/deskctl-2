@@ -7,7 +7,7 @@ import org.json.JSONObject
 /**
  * 手機訊息: 把手機收到的通知 (LINE、簡訊、Email…) 轉發到控制器的「手機訊息」頁。
  * 協定: 手機→控制器 {"k":"msg","i":編號,"a":App名,"t":標題,"x":內容}; 手機上通知被清除/已讀 → {"k":"msgrm","i":編號}。
- * 過濾: 常駐/進度/媒體播放器/群組摘要/本 App 的通知不轉發; 可在設定「隱藏內容」(只顯示 App 名) 與排除特定 App。
+ * 只轉發設定中勾選的 App; 常駐/進度/媒體播放器/群組摘要/本 App 的通知一律不轉發; 可在設定「隱藏內容」(只顯示 App 名)。
  */
 class MessageFeature(host: FeatureHost) : Feature(host) {
     override val id = "message"
@@ -31,7 +31,12 @@ class MessageFeature(host: FeatureHost) : Feature(host) {
         lastText.clear()
     }
 
-    override fun info(): String = if (Prefs.msgOn(host.context)) "訊息轉發已開啟 (本次 $sent 則)" else ""
+    override fun info(): String {
+        val ctx = host.context
+        if (!Prefs.msgOn(ctx)) return ""
+        val n = Prefs.msgAllow(ctx).size
+        return if (n == 0) "訊息轉發: 尚未選擇要轉發的 App" else "訊息轉發: $n 個 App (本次 $sent 則)"
+    }
 
     private fun key(sbn: StatusBarNotification) = sbn.packageName + ":" + sbn.id + ":" + (sbn.tag ?: "")
 
@@ -53,7 +58,7 @@ class MessageFeature(host: FeatureHost) : Feature(host) {
         if (n.flags and Notification.FLAG_ONGOING_EVENT != 0) return
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
         if (n.category != null && n.category in skipCats) return
-        if (Prefs.msgBlock(ctx).contains(pkg)) return
+        if (!Prefs.msgAllow(ctx).contains(pkg)) return            // 只轉發有勾選的 App
         val ex = n.extras ?: return
         if ((ex.getString(Notification.EXTRA_TEMPLATE) ?: "").contains("MediaStyle")) return
         val title = (ex.getCharSequence(Notification.EXTRA_TITLE) ?: "").toString().trim()

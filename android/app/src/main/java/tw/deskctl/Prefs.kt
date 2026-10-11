@@ -35,13 +35,20 @@ object Prefs {
     fun layout(c: Context): String = sp(c).getString("layout", "") ?: ""
     fun setLayout(c: Context, v: String) { sp(c).edit().putString("layout", v).apply() }
 
-    /** 手機訊息: 是否轉發通知 / 是否隱藏內容 / 不轉發的 App / 清理時要保護的 App */
+    /** 手機訊息: 是否轉發通知 / 是否隱藏內容 / 要轉發的 App / 清理時要保護的 App */
     fun msgOn(c: Context): Boolean = sp(c).getBoolean("msg_on", true)
     fun setMsgOn(c: Context, v: Boolean) { sp(c).edit().putBoolean("msg_on", v).apply() }
     fun msgHide(c: Context): Boolean = sp(c).getBoolean("msg_hide", false)
     fun setMsgHide(c: Context, v: Boolean) { sp(c).edit().putBoolean("msg_hide", v).apply() }
-    fun msgBlock(c: Context): Set<String> = getSet(c, "msg_block")
-    fun setMsgBlock(c: Context, v: Collection<String>) = putSet(c, "msg_block", v)
+    /** 只轉發這些 App 的通知 (白名單; 空 = 都不轉發) */
+    fun msgAllow(c: Context): Set<String> = getSet(c, "msg_allow")
+    fun setMsgAllow(c: Context, v: Collection<String>) = putSet(c, "msg_allow", v)
+
+    /** 目錄編輯器已經見過的頁面 id (用來把控制器新增的頁面自動補進自訂目錄) */
+    fun layoutKnown(c: Context): Set<String> =
+        if (sp(c).contains("layout_known")) getSet(c, "layout_known")
+        else setOf("home", "sw", "music", "games", "act", "sys", "manual", "settings")
+    fun setLayoutKnown(c: Context, v: Collection<String>) = putSet(c, "layout_known", v)
     fun cleanProtect(c: Context): Set<String> = getSet(c, "clean_protect")
     fun setCleanProtect(c: Context, v: Collection<String>) = putSet(c, "clean_protect", v)
 

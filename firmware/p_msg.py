@@ -112,7 +112,7 @@ class MsgPage(Page):
         if not n:
             c.text("沒有手機訊息", 6, 20, DIM)
             c.text("手機 App 需開通知存取", 6, 38, FAINT)
-            c.text("並開啟「手機訊息」", 6, 52, FAINT)
+            c.text("並選好要轉發的App", 6, 52, FAINT)
             return
         if self.sel >= n:
             self.sel = n - 1

@@ -463,9 +463,14 @@ class MainActivity : Activity() {
         m2.isChecked = Prefs.msgHide(this)
         m2.setOnCheckedChangeListener { _, c -> Prefs.setMsgHide(this, c) }
         msgc.addView(m2, LinearLayout.LayoutParams(-1, -2))
-        button(msgc, "選擇不轉發的 App") {
-            pickApps("不轉發這些 App 的通知", Prefs.msgBlock(this)) { Prefs.setMsgBlock(this, it) }
+        tvMsgSel = text(msgc, "", 13f, C_PRIMARY)
+        button(msgc, "選擇要轉發的 App", true) {
+            pickApps("只轉發這些 App 的通知", Prefs.msgAllow(this)) {
+                Prefs.setMsgAllow(this, it)
+                tvMsgSel.text = msgSelText()
+            }
         }
+        tvMsgSel.text = msgSelText()
 
         // ---- 控制器目錄 ----
         val lay = card(col)
@@ -562,23 +567,15 @@ class MainActivity : Activity() {
     private lateinit var tvCtl: TextView
     private lateinit var tvSpark: TextView
     private lateinit var tvClean: TextView
+    private lateinit var tvMsgSel: TextView
 
-    /** 列出可開啟的 App 讓使用者勾選 (多選) */
+    private fun msgSelText(): String {
+        val n = Prefs.msgAllow(this).size
+        return if (n == 0) "尚未選擇任何 App: 目前不會轉發任何通知" else "已選 $n 個 App 會轉發"
+    }
+
     private fun pickApps(title: String, current: Set<String>, save: (Set<String>) -> Unit) {
-        val apps = Cleaner.launcherApps(this)
-        val names = apps.map { it.first }.toTypedArray()
-        val checked = BooleanArray(apps.size) { apps[it].second in current }
-        android.app.AlertDialog.Builder(this).setTitle(title)
-            .setMultiChoiceItems(names, checked) { _, i, c -> checked[i] = c }
-            .setPositiveButton("儲存") { _, _ ->
-                val s = HashSet<String>()
-                for (i in apps.indices) if (checked[i]) s.add(apps[i].second)
-                for (p in current) if (apps.none { it.second == p }) s.add(p)
-                save(s)
-                Toast.makeText(this, "已儲存 (${s.size} 個)", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("取消", null)
-            .show()
+        AppPicker.multi(this, title, current, save)
     }
 
     private fun buildStatus(): View {
@@ -686,7 +683,13 @@ class MainActivity : Activity() {
     private var edInit = false
     private var edPagesN = -1
 
+    private var edVer = -1
+
     private fun updateLayoutEditor() {
+        if (edVer != LayoutStore.version) {          // 已存的目錄有變動 (例如自動補入新頁面) -> 重新載入
+            edVer = LayoutStore.version
+            edInit = false
+        }
         val pgs = DeviceInfo.pages
         if (!edInit && pgs.isNotEmpty()) {
             val saved = LayoutStore.load(this)
