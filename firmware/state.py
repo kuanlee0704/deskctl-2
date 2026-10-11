@@ -110,7 +110,7 @@ class State:
         self.layout_changed = False
         self.sys = {}            # 手機系統狀態 (電量/網路/記憶體…)
         self.sys_t = 0
-        self.msgs = []           # 手機通知: [編號, App, 標題, 內容, 收到時間ms, 未讀]
+        self.msgs = []           # 手機通知: [編號, App, 標題, 內容, 收到時間ms, 未讀, 已標記]
         self.msg_ev = None       # 新訊息 (App, 標題) , App 會轉成提示並喚醒螢幕
         self.act_ev = None       # (狀態, 名稱, 訊息) 最近一次手機回報, App 會轉成提示
         # 碼表
@@ -236,13 +236,21 @@ class State:
             self.set_layout(m.get("m"), m.get("r"))
         elif k == "msg":
             i = m.get("i", 0)
+            old = [x for x in self.msgs if x[0] == i]
+            mk = bool(old and old[0][6])                        # 更新同一則時保留標記
             self.msgs = [x for x in self.msgs if x[0] != i]
-            self.msgs.insert(0, [i, str(m.get("a", ""))[:16], str(m.get("t", ""))[:40], str(m.get("x", ""))[:120], now, True])
-            del self.msgs[12:]
-            self.msg_ev = (self.msgs[0][1], self.msgs[0][2])
+            self.msgs.insert(0, [i, str(m.get("a", ""))[:16], str(m.get("t", ""))[:40], str(m.get("x", ""))[:120], now, True, mk])
+            while len(self.msgs) > 12:                          # 超過 12 則: 先丟最舊的「未標記」; 全是標記就丟最新的
+                for j in range(len(self.msgs) - 1, -1, -1):
+                    if not self.msgs[j][6]:
+                        del self.msgs[j]
+                        break
+                else:
+                    del self.msgs[0]
+            self.msg_ev = (self.msgs[0][1], self.msgs[0][2]) if self.msgs and self.msgs[0][0] == i else None
         elif k == "msgrm":            # 手機上已讀/清除 -> 這裡也移除
             i = m.get("i", 0)
-            self.msgs = [x for x in self.msgs if x[0] != i]
+            self.msgs = [x for x in self.msgs if x[0] != i or x[6]]      # 標記過的不會被手機端的清除帶走
         elif k == "act":
             self.act_ev = (m.get("s", ""), m.get("n", ""), m.get("m", ""))
         elif k == "mode":

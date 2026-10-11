@@ -158,6 +158,9 @@ class App:
         self._gc_n = 0
         self.pm = Power(self)
         self.t_boot = now
+        self.mem_hist = []                 # 剩餘記憶體歷史 (每 5 秒一點, 給「系統總覽」畫趨勢)
+        self.mem_min = gc.mem_free()
+        self._mem_t = now
         self._hello_conn = -1
         self._stat_t = now
         gc.collect()
@@ -329,6 +332,13 @@ class App:
             self.cur.dirty = True
             if m.get("k") == "ping":
                 self.link.send({"c": "pong"})
+        if time.ticks_diff(now, self._mem_t) >= 5000:
+            self._mem_t = now
+            f = gc.mem_free()
+            self.mem_hist.append(f)
+            del self.mem_hist[:-30]
+            if f < self.mem_min:
+                self.mem_min = f
         self.link.pump()
         self.pm.update(now)
         on = self.link.online(now) and self.link.connected

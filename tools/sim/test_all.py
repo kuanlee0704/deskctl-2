@@ -239,7 +239,26 @@ r.run(50); check("capped at 12", len(r.st.msgs) == 12)
 a.go("msg"); r.run(100); check("opening page marks read", r.st.unread() == 0)
 r.click(K_CENTER); check("center opens detail", a.cur.detail)
 r.click(K_CENTER); check("center closes detail", not a.cur.detail)
-r.hold(K_UP, 5300); check("5s hold clears all", len(r.st.msgs) == 0, len(r.st.msgs))
+# 總覽: 長按左=刪此則; 長按右=全刪(標記保留)
+r.msg(k="msg", i=901, a="A", t="one", x="1"); r.msg(k="msg", i=902, a="B", t="two", x="2"); r.msg(k="msg", i=903, a="C", t="three", x="3"); r.run(100)
+a.go("msg"); r.run(100); n0 = len(r.st.msgs)
+r.hold(K_LEFT, 900); check("list: long-left deletes one", len(r.st.msgs) == n0 - 1, (n0, len(r.st.msgs)))
+r.click(K_CENTER); check("open detail", a.cur.detail)
+r.hold(K_RIGHT, 900); check("detail: long-right marks", r.st.msgs[a.cur.sel][6] is True)
+mid = r.st.msgs[a.cur.sel][0]; n1 = len(r.st.msgs)
+r.hold(K_LEFT, 900); check("marked cannot be deleted", len(r.st.msgs) == n1 and any(m[0] == mid for m in r.st.msgs))
+r.msg(k="msgrm", i=mid); r.run(50); check("phone msgrm keeps marked", any(m[0] == mid for m in r.st.msgs))
+r.click(K_CENTER); r.hold(K_RIGHT, 900)
+check("list: long-right deletes all but marked", [m[0] for m in r.st.msgs] == [mid], [m[0] for m in r.st.msgs])
+r.click(K_CENTER); r.hold(K_RIGHT, 900); check("detail: long-right unmarks", r.st.msgs[0][6] is False)
+r.hold(K_LEFT, 900); check("unmarked can be deleted", len(r.st.msgs) == 0, len(r.st.msgs))
+for i in range(14):
+    r.msg(k="msg", i=500 + i, a="A", t="t", x="x")
+r.run(50); a.go("msg"); r.run(50); r.click(K_CENTER); r.hold(K_RIGHT, 900); r.click(K_CENTER)
+mk = r.st.msgs[a.cur.sel][0]
+for i in range(20):
+    r.msg(k="msg", i=700 + i, a="A", t="t", x="x")
+r.run(50); check("cap keeps marked", len(r.st.msgs) <= 12 and any(m[0] == mk for m in r.st.msgs), len(r.st.msgs))
 
 # ---------- 手機清理 ----------
 r = Rig(); r.run(100); r.app.go("sys"); r.run(100); r.link.is_online = False

@@ -300,6 +300,26 @@ r = mk(); r.msg(k="msg", i=1, a="LINE", t="a", x="b"); r.run(100)
 for h24, secs, tsecs in itertools.product((0, 1), (0, 1), (0, 1)):
     r.st.cfg.set("h24", h24); r.st.cfg.set("tsecs", tsecs); r.app.go("home", clock.now); snap(r, "topbar mail %d%d%d" % (h24, secs, tsecs))
 
+# ---------- 系統總覽 ----------
+r = mk(); r.app.go("dev", clock.now); r.run(100)
+for n in (0, 3, 40):
+    r.app.mem_hist[:] = [90000 - i * 700 + (i % 5) * 900 for i in range(n)]
+    r.app.cur.sub = 0
+    for i in range(5):
+        snap(r, "dev n=%d sub=%d" % (n, r.app.cur.sub)); r.click(K_DOWN)
+r.msg(k="sys", pl=2, t=345, v=4180, th=0, nt=1, wf=3, bt=1, sc=1, ps=0, ds=0, bk=20, br=0, ra=72, rf=3200, ap=312, ca=48, sf=245); r.st.batt = 100; r.run(100)
+r.app.cur.sub = 0; snap(r, "dev with phone")
+r.st.batt = 7; r.msg(k="sys", br=1, ra=95, nt=0); r.run(100); r.app.cur.sub = 0; snap(r, "dev phone bad")
+r.app.t_boot = clock.now - 3 * 86400000; r.app.cur.sub = 0; snap(r, "dev uptime days"); r.app.cur.sub = 1; snap(r, "dev run days")
+# 訊息: 標記
+r = mk()
+for i in range(4):
+    r.msg(k="msg", i=i + 1, a="LINE", t="王小明", x="好" * (i * 15 + 1))
+r.run(100); r.app.go("msg", clock.now); r.st.msgs[1][6] = True; r.st.msgs[0][5] = True
+for j in range(4):
+    snap(r, "msg marked list sel=%d" % j); r.click(K_DOWN)
+r.click(K_CENTER); snap(r, "msg marked detail")
+
 # ---------- 設定 toast ----------
 r = mk(); r.app.go("sw", clock.now); r.app.toast("先暫停才能重設"); snap(r, "sw toast")
 
